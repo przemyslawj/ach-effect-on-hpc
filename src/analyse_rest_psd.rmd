@@ -1,0 +1,266 @@
+---
+title: "PSD analysis"
+output: html_notebook
+---
+
+```{r }
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+psddf = read_csv('psd_table.csv')
+psddf$animal = as.factor(psddf$animal)
+psddf$experiment = as.factor(psddf$experiment)
+psddf$laser = as.factor(psddf$laser)
+psddf$state = as.factor(psddf$state)
+```
+Add theta/slow variables to the obserservations
+```{r}
+firstpowcol = 6
+nchan = 32
+firstthetacol = firstpowcol + nchan
+start_obs = ncol(psddf) + 1
+psddf[,start_obs:(start_obs+nchan-1)] = psddf[,firstthetacol:(firstthetacol+nchan-1)]  / psddf[,firstpowcol:(firstthetacol-1)]
+colnames(psddf) = c(colnames(psddf)[1:(start_obs-1)], paste0(rep('pow_thetaoverslow_',nchan), format(1:nchan, width=2)))
+```
+
+```{r}
+
+baseline_pow = psddf %>%
+  filter(time_sec == 0) %>%
+  group_by(experiment) %>%
+  slice(1) 
+  #select(-c('animal', 'experiment', 'time_sec', 'laser', 'state'))
+  
+on_pow = psddf %>%
+  filter(laser == 'ON') %>%
+  group_by(experiment) 
+  #left_join(baseline_pow, by='experiment', suffix = c('','.base'))
+  #merge(baseline_pow, by='experiment', suffixes=c('.x', '.base'))
+changepct = on_pow
+assertthat::are_equal(ncol(on_pow), ncol(baseline_pow))
+
+changepct[,6:ncol(on_pow)] = on_pow[,6:ncol(on_pow)] / baseline_pow[,6:ncol(on_pow)] 
+```
+
+Reorganize the data to have one row per channel
+```{r}
+gathered.psddf = gather(psddf, channel, opow_theta, starts_with('pow_theta_')) 
+
+gathered.psddf$channel_i = sapply(strsplit(gathered.psddf$channel, '_'), function(x) as.numeric(x[3]))
+gathered.psddf$opow_slow = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_slow_gamma = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_above_theta = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_thetaoverslow = rep(0, nrow(gathered.psddf))
+for (i in 1:nrow(gathered.psddf)) {
+   ch = gathered.psddf$channel_i[i]
+   
+   col.id = paste0('pow_slow_', format(ch, width=2))
+   gathered.psddf$opow_slow[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_slow_gamma_', format(ch, width=2))
+   gathered.psddf$opow_slow_gamma[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_above_theta_', format(ch, width=2))
+   gathered.psddf$opow_above_theta[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_thetaoverslow_', format(ch, width=2))
+   gathered.psddf$opow_thetaoverslow[i] = gathered.psddf[i, col.id]
+}
+gathered.psddf = select(gathered.psddf, 
+                        c('animal', 'experiment', 'channel_i', 'time_sec', 'laser', 'state'), 
+                        starts_with('opow_'))
+
+gathered.psddf = transform(gathered.psddf, 
+                           opow_slow = as.numeric(opow_slow),
+                           opow_slow_gamma = as.numeric(opow_slow_gamma),
+                           opow_above_theta = as.numeric(opow_above_theta),
+                           opow_thetaoverslow = as.numeric(opow_thetaoverslow))
+```
+
+Explore strength of theta oscillations on each of the channels
+```{r}
+albert.pow_theta =
+  filter(gathered.psddf, animal == 'Albert') %>%
+  filter(state == 'sleep' ) 
+  #gather(channel, pow_slow, starts_with('pow_slow_')) %>%
+  #select(c('experiment', 'laser', 'time_sec', 'state'), starts_with('pow_theta_')) 
+
+ggplot(albert.pow_theta) +
+  geom_point(aes(x=channel_i, y=opow_theta, shape=state, col=laser))
+
+```
+Similar range of oscillations on all electrodes 0.005 to 0.01
+
+
+Run paired t-test
+```{r}
+ttestdat = gathered.psddf %>%
+  filter(animal == 'Albert') %>%
+  filter(state == 'run' ) 
+ondat = filter(ttestdat, laser == 'ON')
+offdat = filter(ttestdat, laser == 'OFF') %>%
+  filter(time_sec == 0) 
+
+varnames = colnames(ttestdat)[7:ncol(ttestdat)]
+tresults = list()
+for (col.id in varnames) {
+  tresult = t.test(ondat[[col.id]], offdat[[col.id]], paired = TRUE)
+  print(paste('Variable', col.id))
+  print(tresult)
+  
+  # Effect in percent
+  effectpct = mean(ondat[[col.id]] - offdat[[col.id]]) / mean(ondat[[col.id]])
+  print('Effect size %')
+  print(effectpct)
+}
+```---
+title: "PSD analysis"
+output: html_notebook
+---
+
+```{r setup}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+psddf = read_csv('psd_table.csv')
+psddf$animal = as.factor(psddf$animal)
+psddf$experiment = as.factor(psddf$experiment)
+psddf$laser = as.factor(psddf$laser)
+psddf$state = as.factor(psddf$state)
+```
+Add theta/slow variables to the obserservations
+```{r}
+firstpowcol = 6
+nchan = 32
+firstthetacol = firstpowcol + nchan
+start_obs = ncol(psddf) + 1
+psddf[,start_obs:(start_obs+nchan-1)] = psddf[,firstthetacol:(firstthetacol+nchan-1)]  / psddf[,firstpowcol:(firstthetacol-1)]
+colnames(psddf) = c(colnames(psddf)[1:(start_obs-1)], paste0(rep('pow_thetaoverslow_',nchan), format(1:nchan, width=2)))
+```
+
+
+Reorganize the data to have one row per channel
+```{r}
+gathered.psddf = gather(psddf, channel, opow_theta, starts_with('pow_theta_')) 
+
+gathered.psddf$channel_i = sapply(strsplit(gathered.psddf$channel, '_'), function(x) as.numeric(x[3]))
+gathered.psddf$opow_slow = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_slow_gamma = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_above_theta = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_thetaoverslow = rep(0, nrow(gathered.psddf))
+for (i in 1:nrow(gathered.psddf)) {
+   ch = gathered.psddf$channel_i[i]
+   
+   col.id = paste0('pow_slow_', format(ch, width=2))
+   gathered.psddf$opow_slow[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_slow_gamma_', format(ch, width=2))
+   gathered.psddf$opow_slow_gamma[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_above_theta_', format(ch, width=2))
+   gathered.psddf$opow_above_theta[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_thetaoverslow_', format(ch, width=2))
+   gathered.psddf$opow_thetaoverslow[i] = gathered.psddf[i, col.id]
+}
+gathered.psddf = select(gathered.psddf, 
+                        c('animal', 'experiment', 'channel_i', 'time_sec', 'laser', 'state'), 
+                        starts_with('opow_'))
+
+gathered.psddf = transform(gathered.psddf, 
+                           opow_slow = as.numeric(opow_slow),
+                           opow_slow_gamma = as.numeric(opow_slow_gamma),
+                           opow_above_theta = as.numeric(opow_above_theta),
+                           opow_thetaoverslow = as.numeric(opow_thetaoverslow))
+```
+
+Explore strength of theta oscillations on each of the channels
+```{r}
+albert.pow_theta =
+  filter(gathered.psddf, animal == 'Albert') %>%
+  filter(state == 'sleep' ) 
+  #gather(channel, pow_slow, starts_with('pow_slow_')) %>%
+  #select(c('experiment', 'laser', 'time_sec', 'state'), starts_with('pow_theta_')) 
+
+ggplot(albert.pow_theta) +
+  geom_point(aes(x=channel_i, y=opow_thetaoverslow, shape=state, col=laser))
+
+```
+Albert - Similar range of theta oscillations on all electrodes 0.005 to 0.01
+
+```{r}
+
+baseline_pow = gathered.psddf %>%
+  filter(time_sec == 0) %>%
+  group_by(experiment) 
+  #select(-c('animal', 'experiment', 'time_sec', 'laser', 'state'))
+  
+on_pow = gathered.psddf %>%
+  filter(laser == 'ON') %>%
+  group_by(experiment) 
+  #left_join(baseline_pow, by='experiment', suffix = c('','.base'))
+  #merge(baseline_pow, by='experiment', suffixes=c('.x', '.base'))
+changepct = on_pow
+
+changepct[,7:ncol(on_pow)] = on_pow[,7:ncol(on_pow)] / baseline_pow[,7:ncol(on_pow)] 
+```
+Albert: channels with biggest change
+```{r}
+channel.changepct = changepct %>%
+  filter(animal == 'Albert') %>%
+  group_by(channel_i) %>%
+  summarise(mtheta = mean(opow_theta), 
+            mthetaoverslow = mean(opow_thetaoverslow, na.rm=TRUE),
+            mslow = mean(opow_slow),
+            mabovetheta = mean(opow_above_theta),
+            mslowgamma = mean(opow_slow_gamma))
+
+albert.swrchannels = c(6, 5, 9, 12,
+                       10, 11, 4,
+                       25, 26, 
+                       21)
+```
+
+
+Run paired t-test
+```{r}
+ttestdat = gathered.psddf %>%
+  filter(animal == 'Albert') %>%
+  filter(state == 'sleep' )  %>%
+  filter(channel_i %in% albert.swrchannels)
+ondat = filter(ttestdat, laser == 'ON')
+offdat = filter(ttestdat, laser == 'OFF') %>%
+  filter(time_sec == 0) 
+
+varnames = colnames(ttestdat)[7:ncol(ttestdat)]
+for (varname in varnames) {
+  tresult = t.test(ondat[[varname]], offdat[[varname]], paired=TRUE)
+  print(paste('Varname ', varname))
+  print(tresult)
+  
+  print('Effect difference')
+  print(mean(ondat[[varname]] - offdat[[varname]], na.rm=TRUE) / mean(offdat[[varname]], na.rm=TRUE))
+}
+
+```
+
+```{r}
+
+```
+
+# TODOs:
+* How well do gamma cycles fit within theta: gamma-theta coherence
+* Quantify only on 'best' channels:
+  - top theta power during run*
+  - biggest change
+  - presence of SWR*
+
+
