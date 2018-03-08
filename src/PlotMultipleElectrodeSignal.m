@@ -21,16 +21,16 @@ dataArray(noisyChannels, :) = zeros(numel(noisyChannels), size(dataArray,2));
 
 % shank 1L
 channelList = [6 5 9 12 7 2 0 1 15] + 1;
-showTraces(dataArray(channelList,:), fs, 'shank 1L');
+showTraces(dataArray(channelList,:), fs, 'shank 1L', channelList);
 
 % shank 1R
 channelList = [10 11 4 3 13 14 8 15] + 1;
-showTraces(dataArray(channelList,:), fs, 'shank 1R');
+showTraces(dataArray(channelList,:), fs, 'shank 1R', channelList);
 
 % shank 2L
 channelList = [25 26 22 19 24 29 31 30 16] + 1;
-showTraces(dataArray(channelList,:), fs, 'shank 2L');
+showTraces(dataArray(channelList,:), fs, 'shank 2L', channelList);
 
 % shank 2R
 channelList = [21 20 27 28 18 17 23 16] + 1;
-showTraces(dataArray(channelList,:), fs, 'shank 2R');
+showTraces(dataArray(channelList,:), fs, 'shank 2R', channelList);

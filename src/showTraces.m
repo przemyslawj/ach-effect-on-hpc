@@ -1,4 +1,4 @@
-function [] = showTraces( x, fs, figure_title )
+function [] = showTraces( x, fs, figure_title, channelList )
 
 if nargin < 3
     figure_title = '';
@@ -16,6 +16,7 @@ vars.fs = fs;
 vars.lengthSeconds = size(x,2) / fs;
 
 vars.rec_len_sec = 2;
+vars.channelList = channelList;
 
 figure('Name', figure_title);
 plotTraces(0, vars);
@@ -27,10 +28,11 @@ end
 function [] = plotTraces(time_start_sec, vars)
     rec_end_i = min(size(vars.x,2), ceil((time_start_sec + vars.rec_len_sec) * vars.fs));
     indecies = floor(time_start_sec * vars.fs + 1) : rec_end_i;
-    minY = min(vars.x(1,:));
-    for i = 1:size(vars.x, 1)
+    nchan = size(vars.x, 1);
+    minY = min(vars.x(nchan,:));
+    for i = linspace(nchan, 1, nchan)
         trace = vars.x(i,:);
-        shifted_trace = (i - 1) * vars.shift + trace;
+        shifted_trace = (nchan - i) * vars.shift + trace;
         plot(vars.times(indecies), shifted_trace(indecies));
         hold on;
     end
@@ -39,6 +41,7 @@ function [] = plotTraces(time_start_sec, vars)
     ylim([minY maxY]);
     grid on;
     grid minor;
+    legend(strsplit(num2str(vars.channelList(linspace(nchan, 1, nchan)))));
 end
 
 function [] = tracesSliderCallback(hObject, evt, vars) 

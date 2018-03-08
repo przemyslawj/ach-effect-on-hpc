@@ -1,5 +1,5 @@
 function [] = plotData(fs, raw, filtered, spikeFiltered, ...
-                       ripple_starts, ripple_ends, ...
+                       ripple_starts, ripple_ends, normalizedSquaredSignal,...
                        spikeTimes, spike_threshold, start_time_sec)
     rec_len_sec = 3;
     start_index = round(start_time_sec * fs) + 1;
@@ -7,15 +7,19 @@ function [] = plotData(fs, raw, filtered, spikeFiltered, ...
     indecies = start_index : end_index; 
     times = indecies / fs;
     
-    subplot(3,1,1);
+    subplot(4,1,1);
     plotSWR(times, filtered(indecies), fs, ripple_starts, ripple_ends);
     ylim([-0.05 0.05]);
 
-    subplot(3,1,2);
+    subplot(4,1,2);
+    plot(times, normalizedSquaredSignal(indecies));
+    ylim([-0.5 6]);
+    
+    subplot(4,1,3);
     plot(times, raw(indecies));
     ylim([-0.3 0.5]);
     
-    subplot(3,1,3);
+    subplot(4,1,4);
     plot(times, spikeFiltered(indecies));
     ylim([-0.08 0.08]);
     

@@ -1,4 +1,4 @@
-function [ripples,sd] = MyFindRipples(time, signal, varargin)
+function [ripples,sd,normalizedSquaredSignal] = MyFindRipples(time, signal, varargin)
 
 %FindRipples - Find hippocampal ripples.
 %
@@ -56,9 +56,10 @@ highThresholdFactor = 5; % Ripple peak must exceed highThresholdFactor*stdev
 minInterRippleInterval = 30; % in ms
 minRippleDuration = 20; % in ms
 maxRippleDuration = 100; % in ms
+lowThresholdMV = 0.02;
 
 % Check number of parameters
-if nargin < 1 | mod(length(varargin),2) ~= 0,
+if nargin < 1 | mod(length(varargin),2) ~= 0
   error('Incorrect number of parameters (type ''help <a href="matlab:help FindRipples">FindRipples</a>'' for details).');
 end
 
@@ -75,6 +76,7 @@ for i = 1:2:length(varargin)
 % 			end
 			lowThresholdFactor = thresholds(1);
 			highThresholdFactor = thresholds(2);
+            lowThresholdMV = thresholds(3);
 		case 'durations'
 			durations = varargin{i+1};
 			if length(durations) == 2
@@ -99,7 +101,7 @@ for i = 1:2:length(varargin)
 			noise = varargin{i+1};
 			if ~isdmatrix(noise) | size(noise,1) ~= size(filtered,1) | size(noise,2) ~= 2
 				error('Incorrect value for property ''noise'' (type ''help <a href="matlab:help FindRipples">FindRipples</a>'' for details).');
-			end
+            end
         otherwise
 			error(['Unknown property ''' num2str(varargin{i}) ''' (type ''help <a href="matlab:help FindRipples">FindRipples</a>'' for details).']);
 	end
@@ -172,7 +174,8 @@ thirdPass = [];
 peakNormalizedPower = [];
 for i = 1:size(secondPass,1)
 	[maxValue,maxIndex] = max(normalizedSquaredSignal([secondPass(i,1):secondPass(i,2)]));
-	if maxValue > highThresholdFactor,
+    maxAbsVal = max(abs(signal([secondPass(i,1):secondPass(i,2)])));
+	if maxValue > highThresholdFactor && maxAbsVal > lowThresholdMV
 		thirdPass = [thirdPass ; secondPass(i,:)];
 		peakNormalizedPower = [peakNormalizedPower ; maxValue];
 	end
@@ -247,6 +250,7 @@ function [U,stdA] = unity(A)
 	stdA = std(A);
     U = (A - meanA)/stdA;
 end
+
 
 end
 
