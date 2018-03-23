@@ -1,5 +1,6 @@
 %% setup results
 datarootdir = '/media/prez/DATA/Prez/N&A_rest';
+%datarootdir = '/media/prez/DATA/Prez/N&A_rest/2018-03-13/signal';
 statefilepath = [datarootdir filesep 'state.csv'];
 statetable = readtable(statefilepath, 'ReadVariableNames', true);
 
@@ -9,6 +10,8 @@ nChans = 32;
 psd_table.pow_slow = zeros(nexp, nChans);
 psd_table.pow_theta = zeros(nexp, nChans);
 psd_table.pow_slow_gamma = zeros(nexp, nChans);
+psd_table.pow_med_gamma = zeros(nexp, nChans);
+psd_table.pow_fast_gamma = zeros(nexp, nChans);
 psd_table.pow_above_theta = zeros(nexp, nChans);
 psd_table.has_ripples = zeros(nexp, nChans);
 psd_table.swr_freq = zeros(nexp, nChans);
@@ -35,7 +38,13 @@ for i = 1:nexp
     % calculate PSD only for trial_duration
     psd_sec_start = 0;
     psd_sec_end = sec_end - sec_start;
-    trial_duration = 10;
+    
+    if sec_length == 0
+        continue
+    end
+    
+    %trial_duration = 10;
+    trial_duration = sec_length;
     if strcmp(statetable.laser{i}, 'OFF')
         if sec_start == 0
             psd_sec_start = sec_end - sec_start - trial_duration;
@@ -56,7 +65,7 @@ for i = 1:nexp
 
     dataArray = filter50Hz(dataArray, fs);
     channel_std = std(dataArray, [], 2);
-    downfs = 125;
+    downfs = 625;
     downsampledDataArray = downsample(dataArray', round(fs / downfs))';
     
     % Filter LFP for SWR detection
@@ -74,32 +83,36 @@ for i = 1:nexp
 
     slow = [0 4];
     theta = [5 10];
-    slow_gamma = [35 45];
-    above_theta = [11, (fs / 2 - 1)];
+    slow_gamma = [30 80];
+    med_gamma = [60 120];
+    fast_gamma = [100 250];
+    above_theta = [11, (downfs / 2 - 1)];
 
     for channel = 1:nChans
         if channel_std(channel) > 0.1
             continue
         end
         
-        %[pxx, freqs] = pwelch(dataArray(channel,:), ...
-        %    floor(fs / 4), floor(fs / 8), floor(fs / 2), fs);
         psd_x = downsampledDataArray(channel,:);
         psd_xx = psd_x((floor(downfs * psd_sec_start) + 1) : min(floor(downfs * psd_sec_end), size(psd_x,2)));
         if isempty(psd_xx)
             continue
         end
         
-        [cws, freqs] = cwt(psd_xx, 'morse', downfs);
+        [pxx, freqs] = pwelch(psd_xx, ...
+            floor(downfs / 4), floor(downfs / 8), floor(downfs / 2), downfs);
+        %[cws, freqs] = cwt(psd_xx, 'morse', downfs);        
+        %pxx = mean(abs(cws .^ 2), 2);
         
-        pxx = mean(abs(cws .^ 2), 2);
         [maxVal, maxValIndex] = max(pxx);
         psd_table.dom_freq(i, channel) = freqs(maxValIndex);
         
-        psd_table.pow_slow(i, channel) = TotalBandPower2(freqs, pxx, slow);
-        psd_table.pow_theta(i, channel) = TotalBandPower2(freqs, pxx, theta);
-        psd_table.pow_slow_gamma(i, channel) = TotalBandPower2(freqs, pxx, slow_gamma);
-        psd_table.pow_above_theta(i, channel) = TotalBandPower2(freqs, pxx, above_theta);
+        psd_table.pow_slow(i, channel) = TotalBandPower(freqs, pxx, slow);
+        psd_table.pow_theta(i, channel) = TotalBandPower(freqs, pxx, theta);
+        psd_table.pow_slow_gamma(i, channel) = TotalBandPower(freqs, pxx, slow_gamma);
+        psd_table.pow_med_gamma(i, channel) = TotalBandPower(freqs, pxx, med_gamma);
+        psd_table.pow_fast_gamma(i, channel) = TotalBandPower(freqs, pxx, fast_gamma);
+        psd_table.pow_above_theta(i, channel) = TotalBandPower(freqs, pxx, above_theta);
         
 
         [ripples, sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(channel,:)', ...
@@ -118,7 +131,7 @@ for i = 1:nexp
     end
 end
 
-writetable(psd_table, 'psd_table2.csv');
+writetable(psd_table, 'psd_table_rest_trialduration60.csv');
             
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));

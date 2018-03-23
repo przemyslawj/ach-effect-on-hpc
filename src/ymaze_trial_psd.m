@@ -78,6 +78,7 @@ for channel = 1:nChans
         else
             [pxx, f1] = pwelch(dataArray(channel,left_i:right_i), ...
                 floor(fs / 4), floor(fs / 8), floor(fs / 2), fs);
+            
             pow_slow(channel, i) = TotalBandPower(f1, pxx, slow);
             pow_theta(channel, i) = TotalBandPower(f1, pxx, theta);
             pow_above_theta(channel, i) = TotalBandPower(f1, pxx, above_theta);

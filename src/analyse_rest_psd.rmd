@@ -8,10 +8,17 @@ library(readr)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+library(PairedData)
+select = dplyr::select
+```
+GGplot theme
+```{r}
+gtheme = theme() + theme_minimal()
 ```
 
+
 ```{r}
-psddf = read_csv('psd_table2.csv')
+psddf = read_csv('psd_table_rest_trialduration60.csv')
 psddf$animal = as.factor(psddf$animal)
 psddf$experiment = as.factor(psddf$experiment)
 psddf$laser = as.factor(psddf$laser)
@@ -35,6 +42,8 @@ gathered.psddf = gather(psddf, channel, opow_theta, starts_with('pow_theta_'))
 gathered.psddf$channel_i = sapply(strsplit(gathered.psddf$channel, '_'), function(x) as.numeric(x[3]))
 gathered.psddf$opow_slow = rep(0, nrow(gathered.psddf))
 gathered.psddf$opow_slow_gamma = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_med_gamma = rep(0, nrow(gathered.psddf))
+gathered.psddf$opow_fast_gamma = rep(0, nrow(gathered.psddf))
 gathered.psddf$opow_above_theta = rep(0, nrow(gathered.psddf))
 gathered.psddf$opow_thetaoverslow = rep(0, nrow(gathered.psddf))
 gathered.psddf$oswr_freq = rep(0, nrow(gathered.psddf))
@@ -51,6 +60,12 @@ for (i in 1:nrow(gathered.psddf)) {
    
    col.id = paste0('pow_slow_gamma_', format(ch, width=2))
    gathered.psddf$opow_slow_gamma[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_med_gamma_', format(ch, width=2))
+   gathered.psddf$opow_med_gamma[i] = gathered.psddf[i, col.id]
+   
+   col.id = paste0('pow_fast_gamma_', format(ch, width=2))
+   gathered.psddf$opow_fast_gamma[i] = gathered.psddf[i, col.id]
    
    col.id = paste0('pow_above_theta_', format(ch, width=2))
    gathered.psddf$opow_above_theta[i] = gathered.psddf[i, col.id]
@@ -76,13 +91,18 @@ for (i in 1:nrow(gathered.psddf)) {
    col.id = paste0('dom_freq_', format(ch, width=2))
    gathered.psddf$odom_freq[i] = gathered.psddf[i, col.id]
 }
-gathered.psddf = select(gathered.psddf, 
+```
+
+```{r}
+gathered.psddf = dplyr::select(gathered.psddf, 
                         c('animal', 'experiment', 'channel_i', 'time_sec', 'laser', 'state'), 
                         starts_with('o'))
 
 gathered.psddf = transform(gathered.psddf, 
                            opow_slow = as.numeric(opow_slow),
                            opow_slow_gamma = as.numeric(opow_slow_gamma),
+                           opow_med_gamma = as.numeric(opow_med_gamma),
+                           opow_fast_gamma = as.numeric(opow_fast_gamma),
                            opow_above_theta = as.numeric(opow_above_theta),
                            opow_thetaoverslow = as.numeric(opow_thetaoverslow),
                            oswr_freq = as.numeric(oswr_freq),
@@ -95,6 +115,27 @@ gathered.psddf = transform(gathered.psddf,
 
 ```
 
+Revalue state factors to more descriptive values
+```{r}
+gathered.psddf$state = plyr::revalue(gathered.psddf$state, 
+                                     c('run'='active', 'isoflurane'='anesthetized', 'sleep'='asleep'))
+```
+
+
+Filter out data from channels which were noisy during trial (pow_theta==0)
+```{r}
+keep_experiments = gathered.psddf %>%
+  group_by(experiment, channel_i) %>%
+  summarise(mopow_theta = max(opow_theta)) %>%
+  filter(mopow_theta != 0) %>%
+  mutate(exp_desc = paste0(experiment, channel_i))
+
+gathered.psddf = gathered.psddf %>%
+  mutate(exp_desc = paste0(experiment, channel_i)) %>%
+  filter(exp_desc %in% keep_experiments$exp_desc) %>%
+  dplyr::select(-c(exp_desc))
+
+```
 
 Albert - Similar range of theta oscillations on all electrodes 0.005 to 0.01
 
@@ -127,60 +168,126 @@ channel.changepct = changepct %>%
             mslowgamma = mean(opow_slow_gamma))
 
 animals.swr_channels = group_by(gathered.psddf, animal, channel_i, state) %>%
-  #filter(state == 'rest') %>%
+  filter(state == 'asleep' & laser == 'OFF') %>%
   summarise( mswr_freq = mean(oswr_freq), mopow_theta = mean(opow_theta) ) %>%
   arrange(desc(mswr_freq)) %>%
   filter(mswr_freq > 0.15) %>%
-  filter(mopow_theta < 0) %>%
-  select(animal, channel_i, mswr_freq) 
+  filter(mopow_theta != 0) %>%
+  dplyr::select(animal, channel_i, mswr_freq) 
+
+best.swr_channels = animals.swr_channels %>%
+  group_by(animal) %>%
+  arrange(desc(mswr_freq)) %>%
+  slice(1) %>%
+  mutate(animal_channel=paste(animal, channel_i, sep='_'))
+
+#best.swr_channels$channel_i[1] = 16
+#best.swr_channels$channel_i[2] = 16
+
 albert.swrchannels = filter(animals.swr_channels, animal == 'Albert')$channel_i
 nigel.swrchannels = filter(animals.swr_channels, animal == 'Nigel')$channel_i
 ```
 
+Filter data to keep only best channels
+```{r}
+best.gathered.psddf = gathered.psddf %>%
+  mutate(animal_channel=paste(animal,channel_i,sep='_')) %>%
+  filter(animal_channel %in% best.swr_channels$animal_channel)
+```
+
+
 #Difference between different states of the animal at laser OFF
 
-Significant diff in theta power between run, rest and sleep
+Albert Significant diff in theta power between run, rest and sleep for all channels
 ```{r}
 albert.psddf = filter(gathered.psddf, animal == 'Albert' & 
                         channel_i %in% albert.swrchannels & laser=='OFF' &
-                        opow_slow < 0)
-run.psddf = albert.psddf %>%
-  filter(state == "run")
-rest.psddf = albert.psddf %>%
+                        opow_slow != 0)
+run.psddf = best.gathered.psddf %>%
+  filter(state == "active")
+rest.psddf = best.gathered.psddf %>%
   filter(state == "rest") 
-sleep.psddf = albert.psddf %>%
-  filter(state == 'sleep')
+sleep.psddf = best.gathered.psddf %>%
+  filter(state == 'asleep')
 
 albert.psddf %>%
-   filter(state == 'run' | state == 'sleep' | state == 'rest')  %>%
+   filter(state == 'active' | state == 'asleep' | state == 'rest')  %>%
   ggplot() +
   geom_point(aes(x=channel_i, y=opow_theta, col=state))
 t.test(run.psddf$opow_theta, rest.psddf$opow_theta)
 t.test(rest.psddf$opow_theta, sleep.psddf$opow_theta)
 ```
-Diff in ripple freq between rest and sleep
+Dominating frequency depending on state - theta during the run
 ```{r}
 albert.psddf %>%
-  filter(state == 'rest' | state == 'sleep') %>%
+   filter(state == 'active' | state == 'asleep' | state == 'rest')  %>%
   ggplot() +
-  geom_point(aes(x=channel_i, y=oswr_freq, col=state))
-t.test(run.psddf$oswr_freq, rest.psddf$oswr_freq)
+  geom_jitter(aes(x=channel_i, y=odom_freq, col=state)) +
+  ylim(c(0, 10))
+```
+```{r}
+best.gathered.psddf %>%
+  filter(laser=='OFF') %>%
+  #filter(state=='run' | state=='sleep' | state == 'run') %>%
+  #filter(animal=='Albert') %>%
+  ggplot() +
+  geom_jitter(height=0,aes(x=state, y=opow_theta, col=animal))+
+  gtheme
+```
+
+
+
+Diff in ripple freq between rest and sleep
+```{r}
+best.gathered.psddf %>%
+  filter(state == 'active' | state == 'asleep') %>%
+  ggplot() +
+  #geom_point(aes(x=state, y=oswr_freq, col=animal)) + 
+  geom_boxplot(aes(x=state,y=oswr_freq)) +
+  ylab('SWRs freq (Hz)') +
+  xlab('State') + gtheme
+t.test(run.psddf$oswr_freq, sleep.psddf$oswr_freq)
 ```
 
 Explore strength of theta oscillations on the channels with SWR
 ```{r}
+paired.psddf = gathered.psddf %>%
+  mutate(channel_laser = paste0(channel_i, '_', laser))
+
+paired.psddf$channel_laser = as.factor(paired.psddf$channel_laser)
+         
 albert.pow_theta =
-  filter(gathered.psddf, animal == 'Albert') %>%
-  filter(state == 'run' )  %>%
-  filter(channel_i %in% albert.swrchannels) 
-albert.theta_diff = changepct %>%
-  filter(state == 'rest') %>%
-  filter(channel_i %in% albert.swrchannels) 
-  #gather(channel, pow_slow, starts_with('pow_slow_')) %>%
-  #select(c('experiment', 'laser', 'time_sec', 'state'), starts_with('pow_theta_')) 
+  filter(paired.psddf, animal == 'Albert') %>%
+  filter(state == 'asleep' )  %>%
+  #filter(channel_i %in% albert.swrchannels) 
+  filter(channel_i == 14) 
+
+on.albert.pow_theta = subset(albert.pow_theta, laser == 'ON', opow_slow_gamma, drop=TRUE)
+start.albert.pow_theta = subset(albert.pow_theta, laser == 'OFF' & time_sec == 0, opow_slow_gamma, drop=TRUE)
+after.albert.pow_theta = subset(albert.pow_theta, laser == 'OFF' & time_sec != 0 & time_sec < 130, opow_slow_gamma, drop=TRUE)
+
+on.albert.swr_freq = subset(albert.pow_theta, laser == 'ON', oswr_freq, drop=TRUE)
+start.albert.swr_freq = subset(albert.pow_theta, laser == 'OFF' & time_sec == 0, oswr_freq, drop=TRUE)
+
+pd = paired(start.albert.pow_theta, on.albert.pow_theta) 
+colnames(pd) = c('start', 'on')
+pd = pd %>%
+  filter(on != 0 & start != 0) 
+with(pd, plot(paired(start, on), type = 'profile')) 
+
+pd = paired(start.albert.swr_freq, on.albert.swr_freq) 
+colnames(pd) = c('start', 'on')
+with(pd, plot(paired(start, on), type = 'profile')) 
+
+#pd = paired(on.albert.pow_theta, after.albert.pow_theta) 
+#colnames(pd) = c('on', 'after')
+#pd = pd %>%
+#  filter(on < 0 & after < 0) 
+#with(pd, plot(paired(on, after), type = 'profile')) 
 
 ggplot(albert.pow_theta) +
-  geom_point(aes(x=channel_i, y=odom_freq, shape=state, col=laser))
+  geom_point(aes(x=channel_laser, y=opow_slow_gamma, shape=state, col=laser)) +
+  theme(axis.text.x = element_text(angle = 90))
 
 ```
 
@@ -189,10 +296,11 @@ Run paired t-test
 ```{r}
 
 experiments_tested = gathered.psddf %>%
-  filter(state == 'run') %>% filter(animal == 'Albert') %>%
+  filter(state == 'asleep') %>% 
+  filter(animal == 'Albert') %>%
   filter(laser == 'OFF' & time_sec == 0) %>%
-  filter(odom_freq >= 4 && odom_freq <= 10) %>%
-  filter(opow_theta < 0) %>%
+  #filter(odom_freq >= 4 && odom_freq <= 10) %>%
+  filter(opow_theta != 0) %>%
   #filter(ohas_ripples == 0) %>%
   filter(TRUE)
 
@@ -212,7 +320,7 @@ ttestchannel = function(gathered.psddf, experiments_tested, ch) {
     if (varname != 'ohas_ripples' && length(x) > 0) {
       
       tresult = t.test(ondat[[varname]], offdat[[varname]], paired=TRUE)
-      if (tresult$p.value < 0.1) {
+      if (!is.nan(tresult$p.value) & tresult$p.value < 0.5) {
         print(paste('Channel', channel, 'Varname ', varname))
         print(tresult)
         
@@ -228,9 +336,32 @@ for (channel in albert.swrchannels) {
 }
 ```
 
+#Difference between channels in gamma freqs
+Read in probe depths data
 ```{r}
-
+probe_depths = read_csv('/media/prez/DATA/Prez/y-maze/probe_depths.csv')
+probe_depths$channel_i = probe_depths$probe_id + 1
 ```
+
+```{r}
+gathered.psddf %>%
+  filter(animal == 'Albert') %>%
+  filter(state == 'active' & laser == 'OFF') %>%
+  left_join(probe_depths, by='channel_i') %>%
+  filter(shank == 1) %>%
+  group_by(experiment) %>%
+  mutate(max_slow_gamma = max(opow_slow_gamma), 
+         max_med_gamma = max(opow_med_gamma), 
+         max_fast_gamma = max(opow_fast_gamma)) %>%
+  ungroup() %>%
+  ggplot() +
+  #geom_point(aes(x=depth, y=opow_fast_gamma / max_fast_gamma), col='blue') +
+  #geom_point(aes(x=depth, y=opow_med_gamma / max_med_gamma), col='green') + 
+  #geom_point(aes(x=depth, y=opow_slow_gamma / max_slow_gamma), col='red') 
+  #geom_point(aes(x=depth, y=opow_fast_gamma), col='green') 
+  geom_point(aes(x=depth, y=opow_med_gamma), col='red') 
+```
+Channels 5, 10, 23 28 at depth 150-165 have highest slow_gamma -> CA1 rad
 
 # TODOs:
 * How well do gamma cycles fit within theta: gamma-theta coherence
