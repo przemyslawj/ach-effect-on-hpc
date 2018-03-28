@@ -181,8 +181,8 @@ best.swr_channels = animals.swr_channels %>%
   slice(1) %>%
   mutate(animal_channel=paste(animal, channel_i, sep='_'))
 
-#best.swr_channels$channel_i[1] = 16
-#best.swr_channels$channel_i[2] = 16
+best.swr_channels$channel_i[1] = 15
+best.swr_channels$channel_i[2] = 17
 
 albert.swrchannels = filter(animals.swr_channels, animal == 'Albert')$channel_i
 nigel.swrchannels = filter(animals.swr_channels, animal == 'Nigel')$channel_i
@@ -256,11 +256,11 @@ paired.psddf = gathered.psddf %>%
 
 paired.psddf$channel_laser = as.factor(paired.psddf$channel_laser)
          
-albert.pow_theta =
-  filter(paired.psddf, animal == 'Albert') %>%
+albert.pow_theta = paired.psddf %>%
+  filter(animal == 'Albert') %>%
   filter(state == 'asleep' )  %>%
   #filter(channel_i %in% albert.swrchannels) 
-  filter(channel_i == 14) 
+  filter(channel_i == 15) 
 
 on.albert.pow_theta = subset(albert.pow_theta, laser == 'ON', opow_slow_gamma, drop=TRUE)
 start.albert.pow_theta = subset(albert.pow_theta, laser == 'OFF' & time_sec == 0, opow_slow_gamma, drop=TRUE)
@@ -297,7 +297,7 @@ Run paired t-test
 
 experiments_tested = gathered.psddf %>%
   filter(state == 'asleep') %>% 
-  filter(animal == 'Albert') %>%
+  #filter(animal == 'Albert') %>%
   filter(laser == 'OFF' & time_sec == 0) %>%
   #filter(odom_freq >= 4 && odom_freq <= 10) %>%
   filter(opow_theta != 0) %>%
@@ -320,7 +320,7 @@ ttestchannel = function(gathered.psddf, experiments_tested, ch) {
     if (varname != 'ohas_ripples' && length(x) > 0) {
       
       tresult = t.test(ondat[[varname]], offdat[[varname]], paired=TRUE)
-      if (!is.nan(tresult$p.value) & tresult$p.value < 0.5) {
+      if (!is.nan(tresult$p.value) & tresult$p.value < 0.2) {
         print(paste('Channel', channel, 'Varname ', varname))
         print(tresult)
         
@@ -335,6 +335,51 @@ for (channel in albert.swrchannels) {
   ttestchannel(gathered.psddf, experiments_tested$experiment, channel)
 }
 ```
+
+Paired t-test on a single channel 
+```{r}
+
+experiments_tested = gathered.psddf %>%
+  #filter(state == 'asleep') %>% 
+  #filter(animal == 'Albert') %>%
+  filter(laser == 'OFF' & time_sec == 0) %>%
+  #filter(odom_freq >= 4 && odom_freq <= 10) %>%
+  filter(opow_theta != 0) %>%
+  #filter(ohas_ripples == 0) %>%
+  filter(TRUE)
+
+ttestdat = best.gathered.psddf %>%
+  #filter((animal == 'Albert' & channel_i == albert.swrchannels[1]) | 
+  #         (animal == 'Nigel' & channel_i == nigel.swrchannels[1])) %>%
+  #filter(animal == 'Albert') %>%
+  filter(state == 'rest') %>%
+  #filter(state == 'rest' | state == 'active') %>%
+  filter(experiment %in% experiments_tested$experiment)
+ondat = filter(ttestdat, laser == 'ON')
+offdat = filter(ttestdat, laser == 'OFF') %>%
+  filter(time_sec == 0) 
+
+
+varnames = colnames(ttestdat)[7:ncol(ttestdat)]
+varnames = 'opow_theta'
+for (varname in varnames) {
+  x = ondat[[varname]]
+  x = x[!is.na(x)]
+  if (varname != 'ohas_ripples' && length(x) > 0) {
+    
+    tresult = t.test(ondat[[varname]], offdat[[varname]], paired=TRUE)
+    if (!is.nan(tresult$p.value) & tresult$p.value < 0.99) {
+      print(paste('Varname', varname))
+      print(tresult)
+      
+      print('% difference')
+      print(tresult$estimate / mean(offdat[[varname]], na.rm=TRUE))
+    }
+  }
+}
+
+```
+
 
 #Difference between channels in gamma freqs
 Read in probe depths data
