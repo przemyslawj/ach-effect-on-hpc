@@ -43,8 +43,8 @@ for i = 1:nexp
         continue
     end
     
-    %trial_duration = 10;
-    trial_duration = sec_length;
+    trial_duration = 10;
+    %trial_duration = sec_length;
     if strcmp(statetable.laser{i}, 'OFF')
         if sec_start == 0
             psd_sec_start = sec_end - sec_start - trial_duration;
@@ -81,12 +81,12 @@ for i = 1:nexp
 
     %% calculate PSD
 
-    slow = [0 4];
-    theta = [5 10];
+    slow = [0.8 5];
+    theta = [6 10];
     slow_gamma = [30 80];
     med_gamma = [60 120];
     fast_gamma = [100 250];
-    above_theta = [11, (downfs / 2 - 1)];
+    above_theta = [10.5, 250];
 
     for channel = 1:nChans
         if channel_std(channel) > 0.1
@@ -99,10 +99,12 @@ for i = 1:nexp
             continue
         end
         
-        [pxx, freqs] = pwelch(psd_xx, ...
-            floor(downfs / 4), floor(downfs / 8), floor(downfs / 2), downfs);
-        %[cws, freqs] = cwt(psd_xx, 'morse', downfs);        
-        %pxx = mean(abs(cws .^ 2), 2);
+        %[pxx, freqs] = pwelch(psd_xx, ...
+        %    floor(downfs / 4), floor(downfs / 8), floor(downfs / 2), downfs);
+        [cws, freqs] = cwt(psd_xx, 'morse', downfs);        
+        pxx = mean(abs(cws .^ 2), 2);
+        freqs = fliplr(freqs')';
+        pxx = fliplr(pxx')';
         
         [maxVal, maxValIndex] = max(pxx);
         psd_table.dom_freq(i, channel) = freqs(maxValIndex);
@@ -131,7 +133,7 @@ for i = 1:nexp
     end
 end
 
-writetable(psd_table, 'psd_table_rest_trialduration60.csv');
+writetable(psd_table, 'psd_table_rest_cwt2.csv');
             
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));

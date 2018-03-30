@@ -1,4 +1,4 @@
-datarootdir = '/home/przemek/neurodata/LFP_data/y-maze/2018-02-13';
+datarootdir = '/media/prez/DATA/Prez/y-maze/2018-02-12';
 signalpath = [datarootdir filesep 'signal'];
 
 binfiles = dir([signalpath filesep '*.bin']);
@@ -21,8 +21,14 @@ for i = 1:numel(binfiles)
     else
         animal_dat = getfield(animals_dat, animal);
     end
-        
-    psd_out = ymaze_trial_psd(datarootdir, binfiles(i));
+    
+    if strcmp(animal, 'Nigel')
+        channels = [17];
+    else
+        channels = [15];
+    end
+    
+    psd_out = ymaze_trial_psd(datarootdir, binfiles(i), channels);
     pow_theta = psd_out.pow_theta;
     
     if isempty(pow_theta)
@@ -34,9 +40,14 @@ for i = 1:numel(binfiles)
     animal_dat.pow_theta(animal_dat.ntrials, :, :) = table2array(pow_theta);
     animal_dat.pow_above_theta(animal_dat.ntrials, :, :) = table2array(psd_out.pow_above_theta);
     animal_dat.slow_gamma(animal_dat.ntrials, :, :) = table2array(psd_out.pow_slow_gamma);
+    animal_dat.med_gamma(animal_dat.ntrials, :, :) = table2array(psd_out.pow_med_gamma);
+    animal_dat.fast_gamma(animal_dat.ntrials, :, :) = table2array(psd_out.pow_fast_gamma);
+    animal_dat.dom_freq(animal_dat.ntrials, :, :) = table2array(psd_out.dom_freq);
+    animal_dat.ripples_freq(animal_dat.ntrials, :, :) = table2array(psd_out.ripples_freq);
+    animal_dat.channels = channels;
     animal_dat.channel_std(animal_dat.ntrials,:) = psd_out.channel_std;
     animals_dat = setfield(animals_dat, animal, animal_dat);
 end
 
-save('animals_dat_2018-02-13.mat', 'animals_dat');
+save('animals_dat_2018-02-12-cwt.mat', 'animals_dat');
 

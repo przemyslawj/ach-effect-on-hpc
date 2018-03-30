@@ -18,7 +18,7 @@ gtheme = theme() + theme_minimal()
 
 
 ```{r}
-psddf = read_csv('psd_table_rest_trialduration60.csv')
+psddf = read_csv('psd_table_rest_cwt2.csv')
 psddf$animal = as.factor(psddf$animal)
 psddf$experiment = as.factor(psddf$experiment)
 psddf$laser = as.factor(psddf$laser)
@@ -340,12 +340,9 @@ Paired t-test on a single channel
 ```{r}
 
 experiments_tested = gathered.psddf %>%
-  #filter(state == 'asleep') %>% 
-  #filter(animal == 'Albert') %>%
-  filter(laser == 'OFF' & time_sec == 0) %>%
-  #filter(odom_freq >= 4 && odom_freq <= 10) %>%
-  filter(opow_theta != 0) %>%
-  #filter(ohas_ripples == 0) %>%
+  filter(laser == 'ON') %>%
+  filter(opow_theta > 0) %>%
+  filter(!grepl('open_field',experiment)) %>%
   filter(TRUE)
 
 ttestdat = best.gathered.psddf %>%
@@ -353,22 +350,22 @@ ttestdat = best.gathered.psddf %>%
   #         (animal == 'Nigel' & channel_i == nigel.swrchannels[1])) %>%
   #filter(animal == 'Albert') %>%
   filter(state == 'rest') %>%
-  #filter(state == 'rest' | state == 'active') %>%
+  filter(state == 'rest' | state == 'active') %>%
   filter(experiment %in% experiments_tested$experiment)
 ondat = filter(ttestdat, laser == 'ON')
 offdat = filter(ttestdat, laser == 'OFF') %>%
   filter(time_sec == 0) 
 
 
-varnames = colnames(ttestdat)[7:ncol(ttestdat)]
-varnames = 'opow_theta'
+varnames = colnames(ttestdat)[7:(ncol(ttestdat)-1)]
+#varnames = 'opow_theta'
 for (varname in varnames) {
   x = ondat[[varname]]
   x = x[!is.na(x)]
   if (varname != 'ohas_ripples' && length(x) > 0) {
     
     tresult = t.test(ondat[[varname]], offdat[[varname]], paired=TRUE)
-    if (!is.nan(tresult$p.value) & tresult$p.value < 0.99) {
+    if (!is.nan(tresult$p.value) & tresult$p.value < 0.9) {
       print(paste('Varname', varname))
       print(tresult)
       

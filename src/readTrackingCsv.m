@@ -24,7 +24,7 @@ for i = 1:numel(key_positions_percent)
     j = find(tracking_dat_filtered.total_percent > key_positions_percent(i), 1);
     key_positions_sec(i) = tracking_dat_filtered.time_sec(j);
 end
-key_positions_sec(end) = max(tracking_dat.frame) / movie_fs;
+key_positions_sec(end) = max(tracking_dat_filtered.frame) / movie_fs;
 
 time_mouse_arrived = table(key_positions_percent', key_positions_sec',...
     'VariableNames', {'percent', 'sec'}, ...
