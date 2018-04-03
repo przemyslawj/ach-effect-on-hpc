@@ -1,0 +1,110 @@
+-psd_table_rest_cwt2--
+title: "PSD ymaze analysis"
+output: html_notebook
+---
+
+```{r }
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(PairedData)
+select = dplyr::select
+```
+
+GGplot theme
+```{r}
+gtheme = theme() + theme_minimal()
+```
+
+```{r}
+psddf = 
+  read_csv('psd_table_ymaze_2018-02-07_cwt.csv') %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-08_cwt.csv')) %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-12_cwt.csv')) %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-13_cwt.csv')) %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-20_cwt.csv')) 
+psddf$animal = as.factor(psddf$animal)
+psddf$experiment = as.factor(psddf$experiment)
+psddf$day = as.integer(psddf$date - as.Date('2018-02-06'))
+psddf$trial_id = (psddf$day - 1) * 10 + psddf$trial
+
+psddf = filter(psddf, pow_theta_Total > 0)
+extended.results = read.csv('/media/prez/DATA/Prez/y-maze/2018-02-07-ymaze_results.csv', sep = ',')
+psddf = left_join(psddf, extended.results, by = c('animal','day','trial'))
+```
+
+```{r}
+plot.singlevar = function(dat, variable) {
+  var.psddf = dat %>%
+    select(animal, trial, trial_id, date, day, experiment, starts_with(variable)) %>%
+    gather(stage, value, starts_with(variable))
+  
+  var.psddf$stage = gsub(variable, '', var.psddf$stage)
+  var.psddf$stage = factor(var.psddf$stage, levels = c('StartZone',  'FirstArm',
+                                                       'Junction', 'SecondArm',
+                                                       'GoalZone', 'AfterReachedReward_10sec', 
+                                                       'AfterConsumedReward_10_sec', 'BeforeGoal', 
+                                                       'DuringMaze', 'HomeCageLast10sec', 'Total'))
+  var.psddf %>%
+    ggplot() +
+    geom_point(aes(x = stage, y = value, col = trial_id)) +
+    gtheme +
+    theme(axis.text.x=element_text(angle = -45, hjust = 0)) +
+    ylab(variable) 
+}
+
+albert.psddf = filter(psddf, animal == 'Albert' & success == 1)
+plot.singlevar(albert.psddf, 'pow_slow_')
+plot.singlevar(albert.psddf, 'pow_theta_')
+plot.singlevar(albert.psddf, 'pow_slow_gamma_')
+plot.singlevar(albert.psddf, 'pow_med_gamma_')
+plot.singlevar(albert.psddf, 'pow_fast_gamma_')
+plot.singlevar(albert.psddf, 'pow_dom_freq_')
+plot.singlevar(albert.psddf, 'pow_ripples_freq_')
+plot.singlevar(albert.psddf, 'velocity_')
+```
+```{r}
+nigel.psddf = filter(psddf, animal == 'Nigel'& success == 1)
+plot.singlevar(nigel.psddf, 'pow_slow_')
+plot.singlevar(nigel.psddf, 'pow_theta_')
+plot.singlevar(nigel.psddf, 'pow_slow_gamma_')
+plot.singlevar(nigel.psddf, 'pow_med_gamma_')
+plot.singlevar(nigel.psddf, 'pow_fast_gamma_')
+plot.singlevar(nigel.psddf, 'pow_dom_freq_')
+plot.singlevar(nigel.psddf, 'pow_ripples_freq_')
+plot.singlevar(albert.psddf, 'velocity_')
+```
+
+
+Questions:
+Correlations of theta with speed
+```{r}
+trials.psddf = filter(psddf)
+theta_speed_cor = cor(trials.psddf$velocity_BeforeGoal, trials.psddf$pow_theta_BeforeGoal, method='pearson')
+
+ggplot(trials.psddf, aes(x=velocity_BeforeGoal, y=log10(pow_theta_BeforeGoal))) +
+  geom_point(aes(col=animal)) +
+  geom_smooth(method = "lm", se = FALSE) + 
+  annotate("text", x = 30, y=-2.5, label = paste0("r=", format(theta_speed_cor, digits=2))) +
+  gtheme +
+  xlab('Velocity (% / sec)') + ylab('Theta power (db / Hz)')
+```
+
+Changes in frequencies as result of the laser
+
+No significant difference in theta 
+```{r}
+t.test(x=albert.psddf$pow_theta_SecondArm, y=albert.psddf$pow_theta_GoalZone, paired=TRUE)
+t.test(x=nigel.psddf$pow_theta_SecondArm, y=nigel.psddf$pow_theta_GoalZone, paired=TRUE)
+```
+
+Difference in slow gamma 
+```{r}
+t.test(x=albert.psddf$pow_slow_gamma_SecondArm, y=albert.psddf$pow_slow_gamma_GoalZone, paired=TRUE)
+t.test(x=nigel.psddf$pow_slow_gamma_SecondArm, y=nigel.psddf$pow_slow_gamma_GoalZone, paired=TRUE)
+```
+
+
+* signif diff between stages?
+

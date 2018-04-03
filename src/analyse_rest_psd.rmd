@@ -339,18 +339,18 @@ for (channel in albert.swrchannels) {
 Paired t-test on a single channel 
 ```{r}
 
-experiments_tested = gathered.psddf %>%
+experiments_tested = best.gathered.psddf %>%
   filter(laser == 'ON') %>%
-  filter(opow_theta > 0) %>%
-  filter(!grepl('open_field',experiment)) %>%
+  filter(opow_theta > 0.000001) %>%
+  #filter(!grepl('open_field',experiment)) %>%
   filter(TRUE)
 
 ttestdat = best.gathered.psddf %>%
   #filter((animal == 'Albert' & channel_i == albert.swrchannels[1]) | 
   #         (animal == 'Nigel' & channel_i == nigel.swrchannels[1])) %>%
-  #filter(animal == 'Albert') %>%
-  filter(state == 'rest') %>%
-  filter(state == 'rest' | state == 'active') %>%
+  #filter(animal == 'Nigel') %>%
+  filter(state == 'asleep') %>%
+  #filter(state == 'rest' | state == 'active') %>%
   filter(experiment %in% experiments_tested$experiment)
 ondat = filter(ttestdat, laser == 'ON')
 offdat = filter(ttestdat, laser == 'OFF') %>%
@@ -365,7 +365,7 @@ for (varname in varnames) {
   if (varname != 'ohas_ripples' && length(x) > 0) {
     
     tresult = t.test(ondat[[varname]], offdat[[varname]], paired=TRUE)
-    if (!is.nan(tresult$p.value) & tresult$p.value < 0.9) {
+    if (!is.nan(tresult$p.value) & tresult$p.value < 0.2) {
       print(paste('Varname', varname))
       print(tresult)
       
