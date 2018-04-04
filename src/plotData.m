@@ -1,7 +1,7 @@
 function [] = plotData(fs, raw, filtered, spikeFiltered, ...
                        ripple_starts, ripple_ends, normalizedSquaredSignal,...
                        spikeTimes, spike_threshold, start_time_sec)
-    rec_len_sec = 3;
+    rec_len_sec = 2;
     start_index = round(start_time_sec * fs) + 1;
     end_index = min(start_index + rec_len_sec * fs, length(filtered));
     indecies = start_index : end_index; 

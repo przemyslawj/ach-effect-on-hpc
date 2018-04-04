@@ -378,6 +378,59 @@ for (varname in varnames) {
 ```
 
 
+# Show some boxplots
+```{r}
+experiments_tested = best.gathered.psddf %>%
+  filter(laser == 'ON') %>%
+  filter(opow_theta > 0.000001) %>%
+  filter(state == 'rest' | state == 'asleep')
+
+ttestdat = subset(best.gathered.psddf,
+  (experiment %in% experiments_tested$experiment) &
+  (laser == 'ON' | time_sec == 0))
+
+start.albert.swr_freq = subset(albert.pow_theta, laser == 'OFF' & time_sec == 0, oswr_freq, drop=TRUE)
+ondat = filter(ttestdat, laser == 'ON')
+rest.ondat = filter(ondat, state == 'rest')
+asleep.ondat = filter(ondat, state == 'asleep')
+offdat = filter(ttestdat, laser == 'OFF')
+rest.offdat = filter(offdat, state == 'rest')
+asleep.offdat = filter(offdat, state == 'asleep')
+
+g1 = ggplot() +
+  geom_boxplot(data=ttestdat, aes(x=state, y=oswr_freq, fill=laser)) +
+  gtheme +
+  xlab('') + ylab('Ripple incidence (Hz)') +
+  theme(text = element_text(size=15)) 
+
+g2 = ggplot() +
+  geom_boxplot(data=ttestdat, aes(x=state, y=oripple_dur, fill=laser)) +
+  gtheme +
+  xlab('') + ylab('Ripple duration (sec)') +
+  theme(text = element_text(size=15)) 
+
+g3 = ggplot() +
+  geom_boxplot(data=ttestdat, aes(x=state, y=oripple_peakpow, fill=laser)) +
+  gtheme +
+  xlab('') + ylab('Ripple peak power (a.u.)') +
+  theme(text = element_text(size=15)) +
+  ylim(0,20)
+
+combined_g = plot_grid(g1,g2,g3, labels = c('A','B','C'), nrow=1, ncol=3)
+combined_g
+ggsave(file=paste0(img_dir, '/', 'rest_ripple_freq.svg'), plot=combined_g, width=15, height=6)
+
+t.test(rest.offdat$oswr_freq, rest.ondat$oswr_freq, paired=T)
+t.test(asleep.offdat$oswr_freq, asleep.ondat$oswr_freq, paired=T)
+
+t.test(rest.offdat$oripple_dur, rest.ondat$oripple_dur, paired=T)
+t.test(asleep.offdat$oripple_dur, asleep.ondat$oripple_dur, paired=T)
+
+t.test(rest.offdat$oripple_dur, rest.ondat$oripple_dur, paired=T)
+t.test(asleep.offdat$oripple_dur, asleep.ondat$oripple_dur, paired=T)
+```
+
+
 #Difference between channels in gamma freqs
 Read in probe depths data
 ```{r}

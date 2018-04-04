@@ -7,6 +7,7 @@ output: html_notebook
 library(readr)
 library(dplyr)
 library(ggplot2)
+library(cowplot)
 library(tidyr)
 library(PairedData)
 select = dplyr::select
@@ -15,12 +16,16 @@ select = dplyr::select
 GGplot theme
 ```{r}
 gtheme = theme() + theme_minimal()
+img_dir = '~/Dropbox/cam/ach/report/img/'
 ```
 
 ```{r}
 psddf = 
   read_csv('psd_table_ymaze_2018-02-07_cwt.csv') %>%
   bind_rows(read_csv('psd_table_ymaze_2018-02-08_cwt.csv')) %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-09_cwt.csv')) %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-10_cwt.csv')) %>%
+  bind_rows(read_csv('psd_table_ymaze_2018-02-11_cwt.csv')) %>%
   bind_rows(read_csv('psd_table_ymaze_2018-02-12_cwt.csv')) %>%
   bind_rows(read_csv('psd_table_ymaze_2018-02-13_cwt.csv')) %>%
   bind_rows(read_csv('psd_table_ymaze_2018-02-20_cwt.csv')) 
@@ -32,48 +37,115 @@ psddf$trial_id = (psddf$day - 1) * 10 + psddf$trial
 psddf = filter(psddf, pow_theta_Total > 0)
 extended.results = read.csv('/media/prez/DATA/Prez/y-maze/2018-02-07-ymaze_results.csv', sep = ',')
 psddf = left_join(psddf, extended.results, by = c('animal','day','trial'))
+stage_levels = c('StartZone',  'FirstArm',
+                 'Junction', 'SecondArm', 'BeforeGoalZone',
+                 'GoalZone', 'AfterReachedReward_10sec', 
+                 'AfterConsumedReward_10_sec',  
+                 'DuringMaze', 'HomeCageLast10sec', 'Total')
 ```
 
 ```{r}
-plot.singlevar = function(dat, variable) {
+plot.singlevar = function(dat, variable,psd_pow=FALSE) {
   var.psddf = dat %>%
     select(animal, trial, trial_id, date, day, experiment, starts_with(variable)) %>%
     gather(stage, value, starts_with(variable))
-  
+  if (psd_pow) {
+    var.psddf$value = log10(var.psddf$value)
+  }
   var.psddf$stage = gsub(variable, '', var.psddf$stage)
-  var.psddf$stage = factor(var.psddf$stage, levels = c('StartZone',  'FirstArm',
-                                                       'Junction', 'SecondArm',
-                                                       'GoalZone', 'AfterReachedReward_10sec', 
-                                                       'AfterConsumedReward_10_sec', 'BeforeGoal', 
-                                                       'DuringMaze', 'HomeCageLast10sec', 'Total'))
-  var.psddf %>%
+  var.psddf$stage = factor(var.psddf$stage, stage_levels)
+  g = var.psddf %>%
+    dplyr::group_by(animal,stage) %>%
+    dplyr::summarize(mval=mean(value),sdval=sd(value)) %>%
+    filter(stage!='BeforeGoalZone' & stage!='DuringMaze' ) %>%
     ggplot() +
-    geom_point(aes(x = stage, y = value, col = trial_id)) +
-    gtheme +
+    geom_line(aes(x=stage, y=mval, group=animal, col=animal)) +
+    geom_ribbon(aes(x=stage, ymin=mval - sdval, ymax=mval + sdval, group=animal), alpha=0.3) +
+    #geom_point(aes(x = stage, y = value, col = trial_id)) +
+    #geom_line(aes(x=stage,y=value,group=experiment, col=trial_id)) +
+    gtheme +  xlab('Stage') +
     theme(axis.text.x=element_text(angle = -45, hjust = 0)) +
     ylab(variable) 
+  return(g)
 }
 
 albert.psddf = filter(psddf, animal == 'Albert' & success == 1)
-plot.singlevar(albert.psddf, 'pow_slow_')
-plot.singlevar(albert.psddf, 'pow_theta_')
-plot.singlevar(albert.psddf, 'pow_slow_gamma_')
-plot.singlevar(albert.psddf, 'pow_med_gamma_')
-plot.singlevar(albert.psddf, 'pow_fast_gamma_')
-plot.singlevar(albert.psddf, 'pow_dom_freq_')
-plot.singlevar(albert.psddf, 'pow_ripples_freq_')
-plot.singlevar(albert.psddf, 'velocity_')
+success.psddf = filter(psddf, success == 1)
+#plot.singlevar(success.psddf, 'pow_slow_')
+#plot.singlevar(success.psddf, 'pow_theta_', T)
+g1=plot.singlevar(success.psddf, 'pow_slow_gamma_', T) +
+  ylab('Power Slow Gamma (db/Hz)')
+g2=plot.singlevar(success.psddf, 'pow_med_gamma_', T) +
+  ylab('Power Medium Gamma (db/Hz)')
+#plot.singlevar(success.psddf, 'pow_fast_gamma_')
+#plot.singlevar(success.psddf, 'pow_dom_freq_')
+#plot.singlevar(success.psddf, 'pow_theta_dom_freq_')
+ripples_freq = plot.singlevar(success.psddf, 'pow_ripples_freq_') +
+  ylab('Ripples Frequency (Hz)')
+#plot.singlevar(success.psddf, 'velocity_')
+ripples_freq
+
+combined_g = plot_grid(g1, g2, ripples_freq, labels = c("A", "B", "C"))
+combined_g
+ggsave(file=paste0(img_dir, '/', 'ymaze_slow&med_gamma.svg'), plot=combined_g, width=12, height=9)
+
 ```
+Ripples in early trials vs late trials
 ```{r}
-nigel.psddf = filter(psddf, animal == 'Nigel'& success == 1)
-plot.singlevar(nigel.psddf, 'pow_slow_')
-plot.singlevar(nigel.psddf, 'pow_theta_')
-plot.singlevar(nigel.psddf, 'pow_slow_gamma_')
-plot.singlevar(nigel.psddf, 'pow_med_gamma_')
-plot.singlevar(nigel.psddf, 'pow_fast_gamma_')
-plot.singlevar(nigel.psddf, 'pow_dom_freq_')
-plot.singlevar(nigel.psddf, 'pow_ripples_freq_')
-plot.singlevar(albert.psddf, 'velocity_')
+variable = 'pow_ripples_freq_'
+var.psddf = psddf %>%
+  select(animal, trial, trial_id, date, day, experiment, success, starts_with(variable)) %>%
+  gather(stage, value, starts_with(variable))
+var.psddf$stage = gsub(variable, '', var.psddf$stage)
+var.psddf$stage = factor(var.psddf$stage, stage_levels)
+
+total.var.psddf = filter(var.psddf, stage == 'Total' & day > 0) 
+albert.total.var.psddf = filter(total.var.psddf, animal == 'Albert')
+nigel.total.var.psddf = filter(total.var.psddf, animal == 'Nigel')
+t.test(albert.total.var.psddf$value, nigel.total.var.psddf$value)
+
+total.var.psddf$day = as.factor(total.var.psddf$day)
+
+g1 = ggplot(data=total.var.psddf, aes(x=day, y=value, fill=animal)) +
+  geom_boxplot() +
+  gtheme +  xlab('Day') +
+  ylab('Ripple Frequency (Hz)') 
+g1
+
+```
+Correlation between SWRs and : start , success
+
+```{r}
+start.var.psddf = filter(var.psddf, stage == 'StartZone' & day < 14 ) %>% 
+  select(trial_id, day, animal, success, value) %>%
+  mutate(Stage='Start Zone')
+afterreward.var.psddf = filter(var.psddf, stage == 'AfterConsumedReward_10_sec' & day < 14)  %>%
+  select(trial_id, day, animal, success, value) %>%
+  mutate(Stage='After Reward')
+total.var.psddf = filter(var.psddf, stage == 'Total' & day < 14)  %>%
+  select(trial_id, day, animal, success, value) %>%
+  mutate(Stage='Total')
+start_or_after.var.psddf = bind_rows(start.var.psddf, afterreward.var.psddf, total.var.psddf) %>%
+  mutate(day_success = paste(day, ' ', if_else(success==1, 'Correct', 'Incorrect')))  
+start_or_after.var.psddf$day = as.factor(start_or_after.var.psddf$day)
+
+gA = filter(start_or_after.var.psddf, animal == 'Albert') %>%
+  ggplot() +
+  geom_boxplot(aes(x=day_success, y=value, fill=Stage)) +
+  gtheme +
+  theme(axis.text.x=element_text(angle = -45, hjust = 0)) +
+  ylim(0, 0.4) +
+  ylab('Ripple Frequency (Hz)') + xlab('Day')
+gN = filter(start_or_after.var.psddf, animal == 'Nigel') %>%
+  ggplot() +
+  geom_boxplot(aes(x=day_success, y=value, fill=Stage)) +
+  gtheme +
+  theme(axis.text.x=element_text(angle = -45, hjust = 0)) +
+  ylim(0, 0.4) +
+  ylab('Ripple Frequency (Hz)') + xlab('Day')
+
+combined_g = plot_grid(gA, gN, labels = c("Albert", "Nigel"))
+ggsave(file=paste0(img_dir, '/', 'ripple_vs_learning_freq_N&A.svg'), plot=combined_g, width=16, height=6)
 ```
 
 
@@ -81,14 +153,21 @@ Questions:
 Correlations of theta with speed
 ```{r}
 trials.psddf = filter(psddf)
-theta_speed_cor = cor(trials.psddf$velocity_BeforeGoal, trials.psddf$pow_theta_BeforeGoal, method='pearson')
+theta_speed_cor = cor(trials.psddf$velocity_BeforeGoalZone, trials.psddf$pow_theta_BeforeGoalZone, method='pearson')
 
-ggplot(trials.psddf, aes(x=velocity_BeforeGoal, y=log10(pow_theta_BeforeGoal))) +
+ggplot(trials.psddf, aes(x=velocity_BeforeGoalZone, y=log10(pow_theta_BeforeGoalZone))) +
   geom_point(aes(col=animal)) +
   geom_smooth(method = "lm", se = FALSE) + 
   annotate("text", x = 30, y=-2.5, label = paste0("r=", format(theta_speed_cor, digits=2))) +
   gtheme +
   xlab('Velocity (% / sec)') + ylab('Theta power (db / Hz)')
+ggsave(file=".svg", plot=g, width=10, height=8)
+```
+```{r}
+trials.psddf = filter(psddf)
+theta_speed_cor = cor(trials.psddf$velocity_SecondArm, trials.psddf$pow_theta_dom_freq_SecondArm, method='pearson')
+
+t.test(albert.psddf$pow_theta_BeforeGoalZone, albert.psddf$pow_theta_GoalZone, paired=TRUE)
 ```
 
 Changes in frequencies as result of the laser
@@ -102,9 +181,87 @@ t.test(x=nigel.psddf$pow_theta_SecondArm, y=nigel.psddf$pow_theta_GoalZone, pair
 Difference in slow gamma 
 ```{r}
 t.test(x=albert.psddf$pow_slow_gamma_SecondArm, y=albert.psddf$pow_slow_gamma_GoalZone, paired=TRUE)
+mdiff = (mean(albert.psddf$pow_slow_gamma_GoalZone) - mean(albert.psddf$pow_slow_gamma_SecondArm)) / mean(albert.psddf$pow_slow_gamma_SecondArm)
+print(mdiff)
 t.test(x=nigel.psddf$pow_slow_gamma_SecondArm, y=nigel.psddf$pow_slow_gamma_GoalZone, paired=TRUE)
+```
+
+```{r}
+t.test(x=albert.psddf$pow_slow_gamma_GoalZone, y=albert.psddf$pow_slow_gamma_AfterConsumedReward_10_sec, paired=TRUE)
+mdiff = (mean(albert.psddf$pow_slow_gamma_GoalZone) - mean(albert.psddf$pow_slow_gamma_SecondArm)) / mean(albert.psddf$pow_slow_gamma_SecondArm)
+print(mdiff)
+t.test(x=nigel.psddf$pow_slow_gamma_SecondArm, y=nigel.psddf$pow_slow_gamma_GoalZone, paired=TRUE)
+```
+
+Med gamma between
+```{r}
+t.test(x=albert.psddf$pow_slow_gamma_SecondArm, y=albert.psddf$pow_slow_gamma_AfterConsumedReward_10_sec, paired=TRUE)
+```
+Stages to compare:
+Start vs junction
+second arm vs Goal
+Goal vs 10sec after
+AfterReachedReward_10sec 
+Start vs AfterConsumedReward_10sec
+DuringMaze vs HomeCageLast10sec
+```{r}
+#test.stagechange = function(dat, fst_stage, snd_stage) { 
+fst_stage = '_BeforeGoalZone'
+snd_stage = '_GoalZone'
+dat = albert.psddf
+  fst_stage_cols = colnames(dat)[endsWith(colnames(dat), fst_stage)]
+  metric_names = gsub(fst_stage, '', fst_stage_cols)
+  metric.psddf = dat %>%
+    select(animal, trial, trial_id, date, day, experiment, fst_stage_cols, ends_with(snd_stage))
+  
+  
+  for (i in 1:length(metric_names)) {
+    metric_name = metric_names[i]
+    xsample = metric.psddf[[paste0(metric_name, fst_stage)]]
+    ysample = metric.psddf[[paste0(metric_name, snd_stage)]]
+    tresult = t.test(xsample, ysample, paired=TRUE)
+    if (!is.nan(tresult$p.value) & tresult$p.value < 0.01) {
+      print(paste('Varname', metric_name))
+      print(tresult)
+      
+      print('% difference')
+      print(tresult$estimate / mean(xsample, na.rm=TRUE))
+    }
+    
+  }
+
+#test.stagechange(success.psddf, 'StartZone', 'Junction')
 ```
 
 
 * signif diff between stages?
+Albert's diff between stages
+
+```{r}
+plot.mpsd = function(datafilepath) {
+mpsd = read.csv(datafilepath)
+gathered.mpsd = gather(mpsd, 'stage', 'power', 1:11) %>%
+  arrange(desc(freqs_start))
+gathered.mpsd$power = log10(gathered.mpsd$power)
+gathered.mpsd$stage = factor(gathered.mpsd$stage, levels=stage_levels)
+g = gathered.mpsd %>%
+  filter(stage != 'Total' & stage!='BeforeGoalZone' & stage!='DuringMaze' & stage !='AfterConsumedReward_10_sec') %>%
+  filter(power > -10) %>%
+  ggplot() +
+  geom_tile(aes(x=stage, y=freqs_end, fill=power)) +
+  gtheme +
+  theme(axis.text.x=element_text(angle = -45, hjust = 0), text = element_text(size=15)) +
+  ylab('Frequency (Hz)') + xlab('Stage') +
+  scale_y_log10(limits=c(3,150), breaks=c(5,10,20,40,80,150)) +
+  #scale_fill_gradient(low = "white", high = "steelblue") +
+  scale_fill_gradientn(colors = pals::parula(256)) +
+  labs(fill='Power (db/Hz)')
+}
+gA = plot.mpsd('albert_mpsd.csv')
+gN = plot.mpsd('nigel_mpsd.csv')
+combined_g = plot_grid(gA, gN, labels = c("Albert", "Nigel"))
+combined_g
+ggsave(file=paste0(img_dir, '/', 'psd_changes.svg'), plot=combined_g, width=12, height=6)
+```
+
 

@@ -36,10 +36,9 @@ end
 
 key_position_names = { 'StartZone',  'FirstArm', 'Junction', 'SecondArm', ...
     'GoalZone', 'AfterReachedReward_10sec', 'AfterConsumedReward_10_sec', ...
-    'BeforeGoal', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
+    'BeforeGoalZone', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
 
 key_positions_sample = round(time_mouse_arrived.sec * fs);
-reached_reward_sample = time_mouse_arrived.sec(end);
 consuming_reward_sec = 10;
 after_reward_sample = time_mouse_arrived.sec(end-1) + consuming_reward_sec * fs;
 interval_indecies = [...
@@ -50,11 +49,12 @@ interval_distances = [time_mouse_arrived.percent(2:end) / 2; 100] - ...
 recording_end_sample = size(dataArray,2);
 interval_indecies = [
     interval_indecies;
-    [(after_reward_sample + round(10 * fs)), size(dataArray,2)];
+    [(after_reward_sample + round(15 * fs)), (after_reward_sample + round(25 * fs))];
     [key_positions_sample(1) key_positions_sample(end - 1)];
-    [key_positions_sample(1) reached_reward_sample]
+    [key_positions_sample(1) key_positions_sample(end)];
+    [(recording_end_sample - 10 * fs) recording_end_sample];
     [key_positions_sample(1) recording_end_sample]
-    (recording_end_sample - 10 * fs) recording_end_sample];
+];
 interval_distances = [
     interval_distances;
     0;
@@ -68,8 +68,9 @@ slow = [0.8 5];
 theta = [6 10];
 slow_gamma = [30 45];
 med_gamma = [60 120];
-fast_gamma = [100 200];
-above_theta = [10.5, 200];
+max_freq = 200;
+fast_gamma = [100 max_freq];
+above_theta = [10.5, max_freq];
 
 pow_slow = zeros(nChans, numel(key_position_names));
 pow_theta = zeros(nChans, numel(key_position_names));
@@ -78,8 +79,12 @@ pow_slow_gamma = zeros(nChans, numel(key_position_names));
 pow_med_gamma = zeros(nChans, numel(key_position_names));
 pow_fast_gamma = zeros(nChans, numel(key_position_names));
 dom_freq = zeros(nChans, numel(key_position_names));
+theta_dom_freq = zeros(nChans, numel(key_position_names));
 ripples_freq = zeros(nChans, numel(key_position_names));
 velocity = zeros(nChans, numel(key_position_names));
+
+all_bands = exp(0.5:0.13:5.4);
+all_psd_xx = zeros(numel(all_bands) - 1, numel(key_position_names));
 
 for ch_i = 1:nChans
     for i = 1:size(interval_indecies, 1)
@@ -97,7 +102,11 @@ for ch_i = 1:nChans
             pow_med_gamma(ch_i, i) = pow_med_gamma(ch_i, i - 1);
             pow_fast_gamma(ch_i, i) = pow_fast_gamma(ch_i, i - 1);
             dom_freq(ch_i, i) = dom_freq(ch_i, i-1);
+            theta_dom_freq(ch_i, i) = dom_freq(ch_i, i-1);
             velocity(ch_i, i) = velocity(ch_i, i-1);
+            for j=1:(numel(all_bands)-1)
+                all_psd_xx(j, i) = all_psd_xx(j, i-1);
+            end
         else
             psd_xx = dataArray(channels(ch_i),left_i:right_i);
 
@@ -124,6 +133,7 @@ for ch_i = 1:nChans
 
             [~, maxValIndex] = max(pxx);
             dom_freq(ch_i, i) = freqs(maxValIndex);
+            theta_dom_freq(ch_i, i) = DomFreqInBand(freqs, pxx, theta);
 
             velocity(ch_i, i) = interval_distances(i) / (times(end) - times(1));
             pow_slow(ch_i, i) = TotalBandPower(freqs, pxx, slow);
@@ -132,6 +142,10 @@ for ch_i = 1:nChans
             pow_slow_gamma(ch_i, i) = TotalBandPower(freqs, pxx, slow_gamma);
             pow_med_gamma(ch_i, i) = TotalBandPower(freqs, pxx, med_gamma);
             pow_fast_gamma(ch_i, i) = TotalBandPower(freqs, pxx, fast_gamma);
+            
+            for j=1:(numel(all_bands)-1)
+                all_psd_xx(j, i) = TotalBandPower(freqs, pxx, [all_bands(j) all_bands(j+1)]);
+            end
         end
     end
 end
@@ -159,13 +173,18 @@ pow_fast_gamma.Properties.VariableNames = strcat('pow_fast_gamma_', key_position
 dom_freq = array2table(dom_freq);
 dom_freq.Properties.VariableNames = strcat('pow_dom_freq_', key_position_names);
 
+theta_dom_freq = array2table(theta_dom_freq);
+theta_dom_freq.Properties.VariableNames = strcat('pow_theta_dom_freq_', key_position_names);
+
 ripples_freq = array2table(ripples_freq);
 ripples_freq.Properties.VariableNames = strcat('pow_ripples_freq_', key_position_names);
 
 velocity = array2table(velocity);
 velocity.Properties.VariableNames = strcat('velocity_', key_position_names);
 
-output.pow = [pow_slow pow_theta pow_above_theta pow_slow_gamma pow_med_gamma pow_fast_gamma dom_freq ripples_freq velocity];
+output.pow = [pow_slow pow_theta pow_above_theta pow_slow_gamma pow_med_gamma pow_fast_gamma dom_freq theta_dom_freq ripples_freq velocity];
+output.psd_xx = all_psd_xx;
+output.psd_all_bands = all_bands;
 output.channel = channel_names;
 
 %% Show spectrogram
@@ -181,6 +200,19 @@ if showspectrograms
     end
 end
 
+end
+
+function [ dom_freq ] = DomFreqInBand(freqs, pxx, band)
+    
+    first_freq_index = find(freqs >= band(1), 1, 'first');
+    last_freq_index = find(freqs < band(2), 1, 'last');
+    if isempty(last_freq_index) || (last_freq_index - first_freq_index < 1) 
+        dom_freq = 0;
+        return;
+    end
+    
+    [~, maxValIndex] = max(pxx(first_freq_index:last_freq_index));
+    dom_freq = freqs(maxValIndex + first_freq_index - 1);
 end
 
 function [ pow ] = TotalBandPower(f1, pxx, band)

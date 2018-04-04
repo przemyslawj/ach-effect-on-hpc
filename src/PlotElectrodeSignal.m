@@ -12,7 +12,7 @@ fs = meta.nSamp;
 %nChans = str2double(meta.nChans);
 nChans=32;
 channelList = 1:nChans;
-channelList = [1 8];
+channelList = [14];
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 

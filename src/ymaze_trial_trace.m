@@ -81,7 +81,7 @@ hold on;
 %plot_band(times, pxx, wfreqs, med_gamma);
 %plot_band(times, pxx, wfreqs, fast_gamma);
 %plot_band(times, pxx, wfreqs, theta);
-legend({'slow gamma', 'med gamma', 'fast gamma', 'theta'});
+draw_keypoints(time_mouse_arrived, [0 0.1], lengthSeconds, time_start_sec);
 
 %% Functions
 function plot_band(times, pxx, freqs, band) 
