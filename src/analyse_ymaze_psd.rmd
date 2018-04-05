@@ -15,7 +15,7 @@ select = dplyr::select
 
 GGplot theme
 ```{r}
-gtheme = theme() + theme_minimal()
+gtheme = theme() + theme_minimal() + theme(text = element_text(size=15))
 img_dir = '~/Dropbox/cam/ach/report/img/'
 ```
 
@@ -30,13 +30,17 @@ psddf =
   bind_rows(read_csv('psd_table_ymaze_2018-02-13_cwt.csv')) %>%
   bind_rows(read_csv('psd_table_ymaze_2018-02-20_cwt.csv')) 
 psddf$animal = as.factor(psddf$animal)
+
+levels(psddf$animal)[levels(psddf$animal) == 'Albert'] = 'Stimulated'
+levels(psddf$animal)[levels(psddf$animal) == 'Nigel'] = 'Control'
+
 psddf$experiment = as.factor(psddf$experiment)
 psddf$day = as.integer(psddf$date - as.Date('2018-02-06'))
 psddf$trial_id = (psddf$day - 1) * 10 + psddf$trial
 
 psddf = filter(psddf, pow_theta_Total > 0)
-extended.results = read.csv('/media/prez/DATA/Prez/y-maze/2018-02-07-ymaze_results.csv', sep = ',')
-psddf = left_join(psddf, extended.results, by = c('animal','day','trial'))
+#extended.results = read.csv('/media/prez/DATA/Prez/y-maze/2018-02-07-ymaze_results.csv', sep = ',')
+#psddf = left_join(psddf, extended.results, by = c('animal','day','trial'))
 stage_levels = c('StartZone',  'FirstArm',
                  'Junction', 'SecondArm', 'BeforeGoalZone',
                  'GoalZone', 'AfterReachedReward_10sec', 
@@ -49,18 +53,27 @@ plot.singlevar = function(dat, variable,psd_pow=FALSE) {
   var.psddf = dat %>%
     select(animal, trial, trial_id, date, day, experiment, starts_with(variable)) %>%
     gather(stage, value, starts_with(variable))
-  if (psd_pow) {
-    var.psddf$value = log10(var.psddf$value)
-  }
   var.psddf$stage = gsub(variable, '', var.psddf$stage)
   var.psddf$stage = factor(var.psddf$stage, stage_levels)
-  g = var.psddf %>%
+  plotdf = var.psddf
+  if (psd_pow) {
+    total.psddf = filter(var.psddf, stage == 'StartZone') %>%
+      rename(total_value=value) %>%
+      right_join(var.psddf, by='experiment', suffix=c('.y','')) %>%
+      mutate(plotted_value = value / total_value) 
+    plotdf = total.psddf
+    #var.psddf$value = var.psddf$value / var.psddf[[paste0(variable,'Total')]]
+  } else {
+    plotdf$plotted_value = var.psddf$value
+  }
+  g = plotdf %>%
+    filter(stage != 'Total') %>%
     dplyr::group_by(animal,stage) %>%
-    dplyr::summarize(mval=mean(value),sdval=sd(value)) %>%
+    dplyr::summarize(mval=mean(plotted_value),sdval=sd(plotted_value)) %>%
     filter(stage!='BeforeGoalZone' & stage!='DuringMaze' ) %>%
     ggplot() +
     geom_line(aes(x=stage, y=mval, group=animal, col=animal)) +
-    geom_ribbon(aes(x=stage, ymin=mval - sdval, ymax=mval + sdval, group=animal), alpha=0.3) +
+    geom_ribbon(aes(x=stage, ymin=mval - sdval, ymax=mval + sdval, group=animal, fill=animal), alpha=0.1) +
     #geom_point(aes(x = stage, y = value, col = trial_id)) +
     #geom_line(aes(x=stage,y=value,group=experiment, col=trial_id)) +
     gtheme +  xlab('Stage') +
@@ -69,27 +82,48 @@ plot.singlevar = function(dat, variable,psd_pow=FALSE) {
   return(g)
 }
 
-albert.psddf = filter(psddf, animal == 'Albert' & success == 1)
-success.psddf = filter(psddf, success == 1)
+#albert.psddf = filter(psddf, animal == 'Albert' & success == 1)
+#success.psddf = filter(psddf, success == 1)
 #plot.singlevar(success.psddf, 'pow_slow_')
 #plot.singlevar(success.psddf, 'pow_theta_', T)
-g1=plot.singlevar(success.psddf, 'pow_slow_gamma_', T) +
-  ylab('Power Slow Gamma (db/Hz)')
-g2=plot.singlevar(success.psddf, 'pow_med_gamma_', T) +
-  ylab('Power Medium Gamma (db/Hz)')
+g1=plot.singlevar(psddf, 'pow_slow_gamma_', T) +
+  ylab('Normalised Slow Gamma Power') + 
+  theme(legend.position = 'none')
+g1
+g2=plot.singlevar(psddf, 'pow_med_gamma_', T) +
+  ylab('Normalised  Medium Gamma Power') 
+g2
 #plot.singlevar(success.psddf, 'pow_fast_gamma_')
 #plot.singlevar(success.psddf, 'pow_dom_freq_')
 #plot.singlevar(success.psddf, 'pow_theta_dom_freq_')
-ripples_freq = plot.singlevar(success.psddf, 'pow_ripples_freq_') +
-  ylab('Ripples Frequency (Hz)')
+ripples_freq = plot.singlevar(psddf, 'pow_ripples_freq_') +
+  ylab('Ripples Frequency (Hz)') 
 #plot.singlevar(success.psddf, 'velocity_')
 ripples_freq
 
-combined_g = plot_grid(g1, g2, ripples_freq, labels = c("A", "B", "C"))
-combined_g
-ggsave(file=paste0(img_dir, '/', 'ymaze_slow&med_gamma.svg'), plot=combined_g, width=12, height=9)
+combined_g = plot_grid(g1, g2, labels = c("A", "B"), ncol = 2, rel_widths = c(1.6,2), label_size = 26)
+#ggsave(file=paste0(img_dir, '/', 'ymaze_slow&med_gamma.svg'), plot=combined_g, width=12, height=7)
 
 ```
+Statistical difference in slow & med gamma
+```{r}
+stim.vars = psddf %>%
+  filter(animal == 'Stimulated') 
+control.vars = psddf %>%
+  filter(animal == 'Control') 
+t.test(stim.vars$pow_slow_gamma_GoalZone / stim.vars$pow_slow_gamma_StartZone, 
+       control.vars$pow_slow_gamma_GoalZone / control.vars$pow_slow_gamma_StartZone)
+t.test(stim.vars$pow_slow_gamma_AfterReachedReward_10sec / stim.vars$pow_slow_gamma_StartZone, 
+       control.vars$pow_slow_gamma_AfterReachedReward_10sec / control.vars$pow_slow_gamma_StartZone)
+t.test(stim.vars$pow_slow_gamma_AfterConsumedReward_10_sec / stim.vars$pow_slow_gamma_StartZone, 
+       control.vars$pow_slow_gamma_AfterConsumedReward_10_sec / control.vars$pow_slow_gamma_StartZone)
+t.test(stim.vars$pow_slow_gamma_HomeCageLast10sec / stim.vars$pow_slow_gamma_StartZone, 
+       control.vars$pow_slow_gamma_HomeCageLast10sec / control.vars$pow_slow_gamma_StartZone)
+# Med gamma
+t.test(stim.vars$pow_med_gamma_AfterConsumedReward_10_sec / stim.vars$pow_slow_gamma_StartZone, 
+       control.vars$pow_med_gamma_AfterConsumedReward_10_sec / control.vars$pow_slow_gamma_StartZone)
+```
+
 Ripples in early trials vs late trials
 ```{r}
 variable = 'pow_ripples_freq_'
@@ -100,8 +134,8 @@ var.psddf$stage = gsub(variable, '', var.psddf$stage)
 var.psddf$stage = factor(var.psddf$stage, stage_levels)
 
 total.var.psddf = filter(var.psddf, stage == 'Total' & day > 0) 
-albert.total.var.psddf = filter(total.var.psddf, animal == 'Albert')
-nigel.total.var.psddf = filter(total.var.psddf, animal == 'Nigel')
+albert.total.var.psddf = filter(total.var.psddf, animal == 'Stimulated')
+nigel.total.var.psddf = filter(total.var.psddf, animal == 'Control')
 t.test(albert.total.var.psddf$value, nigel.total.var.psddf$value)
 
 total.var.psddf$day = as.factor(total.var.psddf$day)
@@ -109,7 +143,7 @@ total.var.psddf$day = as.factor(total.var.psddf$day)
 g1 = ggplot(data=total.var.psddf, aes(x=day, y=value, fill=animal)) +
   geom_boxplot() +
   gtheme +  xlab('Day') +
-  ylab('Ripple Frequency (Hz)') 
+  ylab('Ripple Incidence (Hz)') 
 g1
 
 ```
@@ -129,22 +163,22 @@ start_or_after.var.psddf = bind_rows(start.var.psddf, afterreward.var.psddf, tot
   mutate(day_success = paste(day, ' ', if_else(success==1, 'Correct', 'Incorrect')))  
 start_or_after.var.psddf$day = as.factor(start_or_after.var.psddf$day)
 
-gA = filter(start_or_after.var.psddf, animal == 'Albert') %>%
+gA = filter(start_or_after.var.psddf, animal == 'Stimulated') %>%
   ggplot() +
   geom_boxplot(aes(x=day_success, y=value, fill=Stage)) +
   gtheme +
   theme(axis.text.x=element_text(angle = -45, hjust = 0)) +
   ylim(0, 0.4) +
-  ylab('Ripple Frequency (Hz)') + xlab('Day')
+  ylab('Ripple Incidence (Hz)') + xlab('Day')
 gN = filter(start_or_after.var.psddf, animal == 'Nigel') %>%
   ggplot() +
   geom_boxplot(aes(x=day_success, y=value, fill=Stage)) +
   gtheme +
   theme(axis.text.x=element_text(angle = -45, hjust = 0)) +
   ylim(0, 0.4) +
-  ylab('Ripple Frequency (Hz)') + xlab('Day')
+  ylab('Ripple Incidence (Hz)') + xlab('Day')
 
-combined_g = plot_grid(gA, gN, labels = c("Albert", "Nigel"))
+combined_g = plot_grid(gA, gN, labels = c("Stimulated", "Control"))
 ggsave(file=paste0(img_dir, '/', 'ripple_vs_learning_freq_N&A.svg'), plot=combined_g, width=16, height=6)
 ```
 
@@ -257,9 +291,9 @@ g = gathered.mpsd %>%
   scale_fill_gradientn(colors = pals::parula(256)) +
   labs(fill='Power (db/Hz)')
 }
-gA = plot.mpsd('albert_mpsd.csv')
-gN = plot.mpsd('nigel_mpsd.csv')
-combined_g = plot_grid(gA, gN, labels = c("Albert", "Nigel"))
+gA = plot.mpsd('~/Dropbox/cam/ach/report/data/albert_mpsd.csv')
+gN = plot.mpsd('~/Dropbox/cam/ach/report/data/nigel_mpsd.csv')
+combined_g = plot_grid(gA, gN, labels = c("Stimulated", "Control"))
 combined_g
 ggsave(file=paste0(img_dir, '/', 'psd_changes.svg'), plot=combined_g, width=12, height=6)
 ```
