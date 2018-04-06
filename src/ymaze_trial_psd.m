@@ -67,10 +67,10 @@ interval_distances = [
 slow = [0.8 5];
 theta = [6 10];
 slow_gamma = [30 45];
-med_gamma = [60 120];
+med_gamma = [55 80];
 max_freq = 200;
 fast_gamma = [100 max_freq];
-above_theta = [10.5, max_freq];
+above_theta = [20 30];
 
 pow_slow = zeros(nChans, numel(key_position_names));
 pow_theta = zeros(nChans, numel(key_position_names));
@@ -83,8 +83,10 @@ theta_dom_freq = zeros(nChans, numel(key_position_names));
 ripples_freq = zeros(nChans, numel(key_position_names));
 velocity = zeros(nChans, numel(key_position_names));
 
-all_bands = exp(0.5:0.13:5.4);
+wide_bands = exp(0.5:0.13:5.4);
+all_bands = exp(0.7:0.05:5.3);
 all_psd_xx = zeros(numel(all_bands) - 1, numel(key_position_names));
+wide_psd_xx = zeros(numel(wide_bands) - 1, numel(key_position_names));
 
 for ch_i = 1:nChans
     for i = 1:size(interval_indecies, 1)
@@ -106,6 +108,9 @@ for ch_i = 1:nChans
             velocity(ch_i, i) = velocity(ch_i, i-1);
             for j=1:(numel(all_bands)-1)
                 all_psd_xx(j, i) = all_psd_xx(j, i-1);
+            end
+            for j=1:(numel(wide_bands)-1)
+                wide_psd_xx(j, i) = wide_psd_xx(j, i-1);
             end
         else
             psd_xx = dataArray(channels(ch_i),left_i:right_i);
@@ -146,6 +151,9 @@ for ch_i = 1:nChans
             for j=1:(numel(all_bands)-1)
                 all_psd_xx(j, i) = TotalBandPower(freqs, pxx, [all_bands(j) all_bands(j+1)]);
             end
+            for j=1:(numel(wide_bands)-1)
+                wide_psd_xx(j, i) = TotalBandPower(freqs, pxx, [wide_bands(j) wide_bands(j+1)]);
+            end
         end
     end
 end
@@ -163,7 +171,9 @@ pow_above_theta.Properties.VariableNames = strcat('pow_above_theta_', key_positi
 
 pow_slow_gamma = array2table(pow_slow_gamma);
 pow_slow_gamma.Properties.VariableNames = strcat('pow_slow_gamma_', key_position_names);
-
+key_position_names = { 'StartZone',  'FirstArm', 'Junction', 'SecondArm', ...
+    'GoalZone', 'AfterReachedReward_10sec', 'AfterConsumedReward_10_sec', ...
+    'BeforeGoalZone', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
 pow_med_gamma = array2table(pow_med_gamma);
 pow_med_gamma.Properties.VariableNames = strcat('pow_med_gamma_', key_position_names);
 
@@ -182,9 +192,26 @@ ripples_freq.Properties.VariableNames = strcat('pow_ripples_freq_', key_position
 velocity = array2table(velocity);
 velocity.Properties.VariableNames = strcat('velocity_', key_position_names);
 
+%% Replace 0's at Start Zone with power from subsequent stage
+for j = (numel(key_position_names) - 1) : -1 : 1
+    for i = 1:size(all_psd_xx,1)
+        if all_psd_xx(i,j) == 0
+            all_psd_xx(i,j) = all_psd_xx(i,j+1);
+        end
+    end
+    for i = 1:size(wide_psd_xx,1)
+        if wide_psd_xx(i,j) == 0
+            wide_psd_xx(i,j) = wide_psd_xx(i,j+1);
+        end
+    end
+end
+
+%%
 output.pow = [pow_slow pow_theta pow_above_theta pow_slow_gamma pow_med_gamma pow_fast_gamma dom_freq theta_dom_freq ripples_freq velocity];
-output.psd_xx = all_psd_xx;
+output.all_psd_xx = all_psd_xx ./ repmat(all_psd_xx(:,1), 1, numel(key_position_names));
+output.wide_psd_xx = wide_psd_xx ./ repmat(wide_psd_xx(:,1), 1, numel(key_position_names));
 output.psd_all_bands = all_bands;
+output.psd_wide_bands = wide_bands;
 output.channel = channel_names;
 
 %% Show spectrogram

@@ -1,7 +1,7 @@
-datarootdir = '/media/prez/DATA/Prez/y-maze/2018-02-07';
+datarootdir = '/media/prez/DATA/Prez/y-maze/2018-02-11';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
-channel = 15;
+channel = 17;
 
 fprintf('Processing file: %s, channel:%d', binName, channel);
 
@@ -11,45 +11,38 @@ time_mouse_arrived = readTrackingCsv(tracking_filepath, 0);
 
 %% Set start and end for trace
 movie_fs = 15;
-first_animal_index = find(tracking_dat.pos_x > -1, 1 );
+first_animal_index = find(tracking_dat.pos_x > -1, 1 ) + round(0.6 * movie_fs);
 first_animal_frame = tracking_dat.frame(first_animal_index);
 last_animal_index = find(tracking_dat.pos_x > -1, 1, 'last');
 last_animal_frame = tracking_dat.frame(last_animal_index);
-time_start_sec = first_animal_frame / movie_fs;
+time_start_sec = first_animal_frame / movie_fs + 3;
 time_end_sec = last_animal_frame / movie_fs;
 
 %% Read in data
 meta = ReadMeta(binName, path);
-seconds_after_goal = 60;
+seconds_after_goal = 10;
 lengthSeconds = min(time_end_sec + seconds_after_goal, str2double(meta.fileTimeSecs)) - time_start_sec;
 dataArray = ReadSGLXData(meta, time_start_sec, lengthSeconds);
 fs=800;
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 dataArray = filter50Hz(dataArray, fs);
 
-%% Plot trace + SWRs
-times = (1:size(dataArray,2)) / fs;
 figure;
+%% Show animal positions
 subplot(4,1,1);
+times = (first_animal_frame:last_animal_frame) / movie_fs - time_start_sec;
+plot(times, tracking_dat.total_percent(first_animal_index:last_animal_index) / 2, 'r')
+xlim([0, lengthSeconds]);
+ylim([0,100]);
+tracking_filepath = get_trackingfilepath(datarootdir, binName);
+hold on;
+draw_keypoints(time_mouse_arrived, [0 200], lengthSeconds, time_start_sec);
+
+%% Plot trace
+times = (1:size(dataArray,2)) / fs;
+subplot(4,1,2);
 plot(times, dataArray(channel, :));
 
-% Filter for SWRs
-passband = [100 250];
-nyquist = fs / 2;
-filterOrder = 4;
-filterRipple = 20;
-[b, a] = cheby2(filterOrder,filterRipple,passband/nyquist);
-filtered = filtfilt(b, a, dataArray(channel,:));
-[ripples,sd, normalizedSquaredSignal] = MyFindRipples(times', filtered', ...
-                             'frequency', fs, ...
-                             'thresholds', [2 4 0.02],...
-                             'durations', [30 20 300]);
-subplot(4,1,2);
-if isempty(ripples)
-    plotSWR(times, filtered, fs, [], [])
-else
-    plotSWR(times, filtered, fs, ripples(:,1), ripples(:,3))
-end
 
 subplot(4,1,[3 4]);
 %% Calculate spectrogram
@@ -58,30 +51,22 @@ times = (1:size(dataArray,2)) / fs;
 draw_cwt(cfs, times, wfreqs);
 xlabel('Time (sec)');
 
-%% Show animal positions
-hold on;
-times = (first_animal_frame:last_animal_frame) / movie_fs - time_start_sec;
-plot(times, 200 - tracking_dat.total_percent(first_animal_index:last_animal_index), 'r')
-tracking_filepath = get_trackingfilepath(datarootdir, binName);
-draw_keypoints(time_mouse_arrived, [0 200], lengthSeconds, time_start_sec);
 
-%% Calculate slow gamma at each point
-figure;
-theta = [6 10];
-%slow_gamma = [30 80];
-slow_gamma = [30 45];
-med_gamma = [60 120];
-fast_gamma = [100 200];
-above_theta = [10.5, 200];
-times = (1:size(dataArray,2)) / fs;
-
-pxx = abs(cfs .^ 2);
-plot_band(times, pxx, wfreqs, slow_gamma);
+%% Calculate PSD at goal zone vs start zone
+figure('Name', 'Start vs at reward');
+start_index = max(1, time_mouse_arrived.sec(end-2) * fs - time_start_sec * fs);
+end_index = time_mouse_arrived.sec(end-1) * fs;
+pxx = mean(abs(cfs(:,start_index:end_index) .^ 2), 2);
+semilogx(wfreqs,log10(pxx));
 hold on;
-%plot_band(times, pxx, wfreqs, med_gamma);
-%plot_band(times, pxx, wfreqs, fast_gamma);
-%plot_band(times, pxx, wfreqs, theta);
-draw_keypoints(time_mouse_arrived, [0 0.1], lengthSeconds, time_start_sec);
+
+start_index = (time_mouse_arrived.sec(end-1) - time_start_sec) * fs;
+end_index = (time_mouse_arrived.sec(end) - time_start_sec) * fs;
+pxx = mean(abs(cfs(:,start_index:end_index) .^ 2), 2);
+semilogx(wfreqs,log10(pxx));
+xlim([1,200]);
+
+
 
 %% Functions
 function plot_band(times, pxx, freqs, band) 
