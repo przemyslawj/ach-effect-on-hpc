@@ -1,0 +1,266 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+```
+
+GGplot theme
+```{r}
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=20), axis.text = element_text(size=16)) 
+```
+
+
+```{r}
+dat_dir = '~/Dropbox/cam/ach/report/y_maze_results/'
+results = read.csv(paste0(dat_dir, 'y_maze_results.csv'), sep = ',')
+extended.results = read.csv(paste0(dat_dir,'y_maze_results_extended.csv'), sep = ',')
+
+glimpse(results)
+
+gathered.results = gather(results, 'dayi', 'pct', starts_with('day')) %>%
+  mutate(day = as.integer(sub('day', '', dayi)))
+gathered.results$pct = gathered.results$pct * 100
+```
+```{r}
+
+geno_pct = gathered.results %>%
+  group_by(geno, day) %>%
+  summarise(mpct = mean(pct), sdpct = sd(pct)) 
+
+```
+
+```{r}
+ggplot(geno_pct) +
+  geom_line(aes(x = day, y = mpct, color = geno)) +
+  geom_ribbon(aes(x = day, ymin = mpct - sdpct, ymax = mpct + sdpct, group=geno), alpha=0.3) +
+  geom_jitter(data=gathered.results, heigth=0, width=0.1, aes(x = day, y = pct, color = geno)) +
+  ylab('Correct trials (percent)') +
+  xlab('Day') +
+  scale_colour_discrete(name = "Genotype")
+```
+
+```{r}
+genos = read.csv(paste0(dat_dir, 'genotypes.csv')) %>%
+  mutate(full_id = paste0(cage, '_', id))
+
+extended.results = extended.results %>%
+  mutate(full_id = paste0(cage, '_', id)) %>%
+  mutate(csuccess = success == '1') %>%
+  mutate(fsuccess = success == '0') %>%
+  mutate(timeout = (success == '0x' | success == '0X')) %>%
+  mutate(trial_id = (day - 1) * 10 + trial) %>%
+  left_join(genos, by='full_id', suffix=c('', '.x')) 
+
+extended.results$full_id = as.factor(extended.results$full_id)
+```
+
+
+```{r}
+sum.results = extended.results %>%
+  group_by(day,cage,id, full_id,genotype) %>%
+  summarise(pct=mean(csuccess), fpct=mean(fsuccess), mtime=mean(time), sdtime=sd(time)) 
+
+grouped.results = sum.results %>%
+  group_by(genotype, day) %>%
+  summarise(mpct = mean(pct) * 100, sdpct = sd(pct) * 100, 
+            ymax_mpct = min(100, mpct+sdpct), 
+            mfail = mean(fpct) * 100, sdfail = sd(fpct) * 100,
+            ymin_mfail = max(0, mfail-sdfail))
+```
+
+Successes (not-move counted as a failure)
+```{r}
+g1 = ggplot(grouped.results) + 
+  geom_line(aes(x = day, y = mpct, color = genotype), size=1.3) +
+  geom_ribbon(aes(x = day, ymin = mpct - sdpct, ymax = ymax_mpct, group=genotype), alpha=0.1) +
+  #geom_jitter(data=sum.results, heigth=0, width=0.1, aes(x = day, y = pct, color = genotype)) +
+  geom_line(data=sum.results,aes(x = day, y = pct * 100, group = full_id, color=genotype), alpha=0.4) +
+  ylab('% Correct Trials') +
+  xlab('Day') + ylim(0,105) +
+  scale_colour_discrete(name = "Genotype") + gtheme +
+  scale_y_continuous(breaks = c(0,20,40,60,80,100), limits=c(0, 100))+
+  theme(legend.position = 'none')
+ g1 
+```
+
+
+
+Incorrect trials (not-move counted as not a failure)
+```{r}
+g2 = ggplot(grouped.results) +
+  geom_line(aes(x = day, y = mfail, color = genotype), size=1.3) +
+  geom_ribbon(aes(x = day, ymin = ymin_mfail, ymax = mfail + sdfail, group=genotype), alpha=0.1) +
+  #geom_jitter(data=sum.results, heigth=0, width=0.1, aes(x = day, y = fpct, color = genotype)) +
+  geom_line(data=sum.results,aes(x = day, y = fpct * 100, group = full_id, color=genotype), alpha=0.4) +
+  ylab('% Incorrect Trials') +
+  xlab('Day') +
+  scale_y_continuous(breaks = c(0,20,40,60,80,100), limits = c(0,100))+
+  scale_colour_discrete(name = "Genotype") + gtheme +
+  theme(legend.position = 'none') 
+g2
+```
+When did learn?
+```{r}
+t.test(subset(results, geno=='ChAT-Ai32')$flearnt_day,
+       subset(results, geno=='WT')$flearnt_day)
+g3=ggplot(gathered.results) +
+  geom_boxplot(aes(x=geno, y=flearnt_day, fill=geno), width=0.5) + 
+  gtheme +
+  theme(legend.position = 'right') +
+  labs(fill = "Genotype") + 
+  xlab('Genotype') + ylab('Day learning criterion reached') + ylim(1,6)
+
+g3
+img_dir = '~/Dropbox/cam/ach/report/img/'
+combined_g = plot_grid(g1, g2, g3, labels = c("A", "B", "C"), ncol = 3, rel_widths = c(2,2,2.5), label_size = 22)
+ggsave(file=paste0(img_dir, '/', 'ymaze_result.svg'), plot=combined_g, width=11, height=4)
+```
+
+
+Timeout trials 
+```{r}
+timeout.results = extended.results %>%
+  left_join(results) %>%
+  filter(day < flearnt_day) %>%
+  group_by(cage,id, genotype) %>%
+  summarise(ntimeout=sum(timeout)) 
+t.test(subset(timeout.results, genotype == 'ChAT-Ai32')$ntimeout,
+       subset(timeout.results, genotype == 'WT')$ntimeout)
+ggplot(timeout.results) +
+  geom_jitter(aes(y=ntimeout,x=genotype,col=genotype))
+
+```
+
+For each learnt how many failures before
+```{r}
+#TODO: think through what want to do
+extended.results$learntratio = rep(0, nrow(extended.results))
+
+miceids = levels(extended.results$full_id)
+for (i in 1:length(miceids)) {
+  mouse.results = filter(extended.results, full_id == miceids[i]) %>% arrange()
+  mouse.results$learnratio[1] = mouse.results$ssuccess - 1
+  for (j in 2:nrow(mouse.results)) {
+    mouse.results$learnratio[j] = 1
+  }
+}
+```
+
+
+Mouse speed over days
+```{r}
+ggplot(sum.results) +
+  geom_line(aes(x = day, y = mtime, group = full_id, color=genotype), alpha=0.2) +
+  ylab('Mean time per trial (secs)') +
+  xlab('Day') +
+  scale_colour_discrete(name = "Genotype") + gtheme
+
+mtime.results = extended.results %>%
+  left_join(results) %>%
+  filter(time < 70) %>%
+  filter(!timeout) %>%
+  #filter(day < flearnt_day) %>%
+  group_by(full_id,genotype) %>%
+  summarise(mtime=mean(time))
+
+t.test(subset(mtime.results, genotype == 'ChAT-Ai32')$mtime,
+       subset(mtime.results, genotype == 'WT')$mtime)
+```
+Speed on correct vs incorrect trials
+```{r}
+success.sum.results = extended.results %>%
+  filter(csuccess == TRUE) %>%
+  group_by(day,cage,id, full_id,genotype) %>%
+  summarise(pct=mean(csuccess), fpct=mean(fsuccess), mtime=mean(time), sdtime=sd(time)) 
+
+failed.sum.results = extended.results %>%
+  filter(fsuccess == TRUE) %>%
+  group_by(day,cage,id, full_id,genotype) %>%
+  summarise(pct=mean(csuccess), fpct=mean(fsuccess), mtime=mean(time), sdtime=sd(time)) 
+
+ggplot() +
+  geom_line(data=success.sum.results, aes(x = day, y = mtime, group = full_id, color=genotype), alpha=0.2, shape='1') +
+  geom_line(data=failed.sum.results, aes(x = day, y = mtime, group = full_id, color=genotype), alpha=0.3, shape='1', linetype='dashed') +
+  ylab('Mean time per trial (secs)') +
+  xlab('Day') +
+  scale_colour_discrete(name = "Genotype")+gtheme
+
+```
+```{r}
+weights = read_csv(paste0(dat_dir, 'weights.csv'))
+combined.df = sum.results %>%
+  full_join(weights, by=c('cage', 'id', 'day'))
+rownames(combined.df) = paste(combined.df$cage, combined.df$id, combined.df$day, sep='_')
+```
+Fill in missing weights assuming linear change of weight
+```{r}
+for (i in 1:nrow(combined.df)) {
+  if (is.na(combined.df$weight[i])) {
+    cday = combined.df$day[i]
+    full_id = paste(combined.df$cage[i], combined.df$id[i], sep='_')
+    row_before = paste(full_id, cday - 1, sep='_')
+    for (k in (combined.df$day[i] + 1) : 9) {
+      row_after = paste(full_id, k, sep='_')
+      if (!is.na(combined.df[[row_after, 'weight']])) {
+        break
+      }
+    } 
+    combined.df$weight[i] = (combined.df[[row_before, 'weight']] + combined.df[[row_after, 'weight']]) / 2
+  }
+}
+```
+
+
+```{r}
+ggplot(combined.df) +
+  geom_point(aes(x=weight, y=mtime, col=genotype)) +
+  gtheme
+  
+
+```
+
+
+```{r}
+na.extended.results = read.csv('/media/prez/DATA/Prez/y-maze/2018-02-07-ymaze_results.csv', sep = ',')
+na.extended.results = na.extended.results %>%
+  mutate(csuccess = success == '1') %>%
+  mutate(fsuccess = success == '0') %>%
+  mutate(trial_id = (day - 1) * 10 + trial) %>%
+  filter(day < 10)
+
+na.sum.results = na.extended.results %>%
+  group_by(day, animal) %>%
+  summarise(pct=mean(csuccess) * 100, fpct=mean(fsuccess) * 100, mtime=mean(time), sdtime=sd(time)) 
+```
+
+Plot successes and failures
+```{r}
+g1 = ggplot(na.sum.results) +
+  geom_line(aes(x = day, y = pct, color = animal), size=1.3) +
+  ylab('% Correct Trials') +
+  xlab('Day') +
+  scale_colour_discrete(name = "Animal") + gtheme +
+  theme(text = element_text(size=15))
+g2 = ggplot(na.sum.results) +
+  geom_line(aes(x = day, y = fpct, color = animal), size=1.3) +
+  ylab('% Incorrect Trials') +
+  xlab('Day') +
+  scale_colour_discrete(name = "Animal") + gtheme +
+  theme(text = element_text(size=15)) 
+    
+combined_g = plot_grid(g1, g2, labels = c("A", "B"))
+combined_g
+ggsave(file=paste0(img_dir, '/', 'N&A_ymaze_result.svg'), plot=combined_g, width=11, height=6)
+
+```
+
