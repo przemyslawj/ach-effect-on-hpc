@@ -1,4 +1,4 @@
-datarootdir = '/media/prez/DATA/Prez/y-maze/2018-02-11';
+datarootdir = 'F:\LFP_data\y-maze\2018-02-13';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 channel = 17;

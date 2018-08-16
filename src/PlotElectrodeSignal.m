@@ -1,4 +1,4 @@
-path = '/media/prez/DATA/Prez/N&A_rest/';
+path = 'E:\Ymaxe recording\2018-08-15';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
@@ -10,9 +10,10 @@ lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
 %lengthSeconds = 3;
 fs = meta.nSamp;
 %nChans = str2double(meta.nChans);
-nChans=32;
+nChans=21;
 channelList = 1:nChans;
-channelList = [14];
+channelList = [4];
+meta.nChans = nChans;
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 
@@ -23,7 +24,7 @@ dataArray = filter50Hz(dataArray, fs);
 
 %% Filter LFP
 filtered = zeros(size(dataArray));
-passband = [100 250];
+passband = [80 250];
 nyquist = fs / 2;
 filterOrder = 4;
 filterRipple = 20;

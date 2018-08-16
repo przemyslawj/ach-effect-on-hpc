@@ -37,7 +37,7 @@ function [] = plotTraces(time_start_sec, vars)
         hold on;
     end
     hold off;
-    maxY = max(shifted_trace);
+    maxY = max(shifted_trace) + 1;
     ylim([minY maxY]);
     grid on;
     grid minor;

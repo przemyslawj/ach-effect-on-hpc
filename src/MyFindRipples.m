@@ -54,8 +54,8 @@ show = 'off';
 lowThresholdFactor = 2; % Ripple envoloppe must exceed lowThresholdFactor*stdev
 highThresholdFactor = 5; % Ripple peak must exceed highThresholdFactor*stdev
 minInterRippleInterval = 30; % in ms
-minRippleDuration = 20; % in ms
-maxRippleDuration = 100; % in ms
+minRippleDuration = 30; % in ms
+maxRippleDuration = 250; % in ms
 lowThresholdMV = 0.02;
 
 % Check number of parameters
