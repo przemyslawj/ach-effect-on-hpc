@@ -1,0 +1,63 @@
+function [animals_dat] = summarize_ymaze_psd_dir(datarootdir, output_file)
+
+if nargin < 2
+    datarootdir = '/mnt/DATA/Clara/ymaze/2018-08-17';
+    output_file = 'psd_table_ymaze_2018-08-17_cwt.csv';
+end
+datarootdir
+signalpath = [datarootdir filesep 'signal'];
+
+binfiles = dir([signalpath filesep '*.bin']);
+
+animals_dat = struct();
+ntrials = 10;
+nchans = 32;
+psd_table = table();
+electrodes_file = '/mnt/DATA/Clara/ymaze/selected_electrodes.csv';
+electrodes = readtable(electrodes_file);
+
+for i = 1:numel(binfiles)
+    filename_parts  = strsplit(binfiles(i).name, '_');
+    animal = filename_parts{1};
+    dstr = datestr(binfiles(1).date, 'yyyy-mm-dd');
+    experiment = [dstr '_' filename_parts{1} '_' filename_parts{2} '_' filename_parts{3}];
+    
+    channels = electrodes(strcmp(electrodes.animal, animal),:).channel;
+    nchans = numel(channels);
+    
+    % Set up data for animal
+    if ~isfield(animals_dat, animal)
+        channel_std = zeros(ntrials, nchans);
+        animal_dat = struct(...
+            'ntrials', 0, ...
+            'all_psd', zeros(92,11),...
+            'wide_psd', zeros(37,11),...
+            'channel_std', channel_std);
+    else
+        animal_dat = getfield(animals_dat, animal);
+    end
+
+    
+    psd_out = ymaze_trial_psd(datarootdir, binfiles(i), channels);
+    if isempty(psd_out.pow) || any(any(psd_out.all_psd_xx > 0)) == 0
+        continue
+    end
+    
+    nrows = size(psd_out.pow, 1);
+    psd_out.pow.experiment = cellstr(repmat(experiment, nrows, 1));
+    psd_out.pow.trial = cellstr(repmat(filename_parts{3}, nrows, 1));
+    psd_out.pow.animal = cellstr(repmat(animal, nrows, 1));
+    psd_out.pow.date = cellstr(repmat(dstr, nrows, 1));
+    animal_dat.all_psd = animal_dat.all_psd + psd_out.all_psd_xx;
+    animal_dat.wide_psd = animal_dat.wide_psd + psd_out.wide_psd_xx;
+    animal_dat.psd_all_bands = psd_out.psd_all_bands;
+    animal_dat.psd_wide_bands = psd_out.psd_wide_bands;
+    animal_dat.ntrials = animal_dat.ntrials + 1;
+    
+    animals_dat = setfield(animals_dat, animal, animal_dat);
+    psd_table = [psd_table; psd_out.pow];
+end
+
+writetable(psd_table, output_file);
+
+end

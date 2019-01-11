@@ -2,6 +2,7 @@
 %NOTE: current directory must be the buzcode base directory
 
 addpath(genpath('externalPackages'))
+addpath(genpath('src'))
 
 try
 cd('externalPackages/FilterM/')
