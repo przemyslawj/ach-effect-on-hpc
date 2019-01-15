@@ -1,4 +1,4 @@
-datarootdir = '/mnt/DATA/Clara/ymaze/2018-08-20';
+datarootdir = '/mnt/DATA/Clara/ymaze/2018-08-16';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
@@ -12,15 +12,18 @@ expname = binNameParts{1};
 
 
 secondOffset = 0;
-lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 40);
+lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 60);
 
 
 nChans = meta.nChans;
 
 animal_code = binName(1:2);
-electrodes_file = '/mnt/DATA/Clara/ymaze/selected_electrodes.csv';
+electrodes_file = '/mnt/DATA/Clara/ymaze/selected_electrodes2.csv';
 electrodes = readtable(electrodes_file);
 channelList = electrodes(strcmp(electrodes.animal, animal_code),:).channel;
+if isempty(channelList)
+    channelList=1:nChans;
+end
 
 fs = 600;
 time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);

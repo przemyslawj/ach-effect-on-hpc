@@ -1,4 +1,4 @@
-path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
+path = '/mnt/DATA/Clara/baseline/2018-09-05/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
@@ -24,7 +24,7 @@ dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 
 %% Filter LFP
 filtered = zeros(size(dataArray));
-passband = [170 230];
+passband = [80 250];
 nyquist = fs / 2;
 filterOrder = 4;
 filterRipple = 20;
@@ -80,8 +80,8 @@ for i = 1:numel(channelList)
     time=(1:size(filtered,2))/fs;
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...
                                  'frequency', fs, ...
-                                 'thresholds', [2 3.5 0.01],...
-                                 'durations', [30 20 300]);
+                                 'thresholds', [2 3 0.01],...
+                                 'durations', [10 40 350]);
     spikeTimes = find(spikes_i(chan,:) > 0) / fs;
     if ~isempty(ripples)                               
         ripple_starts = ripples(:,1);

@@ -1,7 +1,11 @@
 function [ output ] = ymaze_trial_psd(datarootdir, binfile, channels, showspectrograms )
 output = struct(...
     'pow',table(),...
-    'channel_std', []);
+    'channel_std', [],...
+    'all_psd_xx', [],...
+    'wide_psd_xx',[],...
+    'psd_all_bands',[],...
+    'channel',[]);
 
 if nargin < 4
     showspectrograms = false;
@@ -18,7 +22,7 @@ dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 fs = 525;
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 
-dataArray = filter50Hz(dataArray, fs);
+%dataArray = filter50Hz(dataArray, fs);
 nChans = numel(channels);
 
 %% Find noisy channels
@@ -31,14 +35,23 @@ if isempty(time_mouse_arrived)
     return
 end
 
+if any(channels > size(dataArray,1))
+    return
+end
+
 %% Run Power analysis
 % Power Spectral analysis
 
 key_position_names = { 'StartZone',  'FirstArm', 'Junction', 'SecondArm', ...
     'GoalZone', 'AfterReachedReward_10sec', 'AfterConsumedReward_10_sec', ...
-    'BeforeGoalZone', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
+    'BeforeGoalZone', 'DuringStim', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
 
 key_positions_sample = round(time_mouse_arrived.sec * fs);
+key_positions_sample(1) = max(key_positions_sample(1), 1);
+if key_positions_sample(1) > size(dataArray, 2)
+    return
+end
+
 consuming_reward_sec = 10;
 after_reward_sample = time_mouse_arrived.sec(end) + consuming_reward_sec * fs;
 interval_indecies = [...
@@ -49,8 +62,9 @@ interval_distances = [time_mouse_arrived.percent(2:end) / 2; 100] - ...
 recording_end_sample = size(dataArray,2);
 interval_indecies = [
     interval_indecies;
-    [(after_reward_sample + round(15 * fs)), (after_reward_sample + round(25 * fs))];  % AfterConsumerdReward_10_sec
+    [(after_reward_sample + round(10 * fs)), (after_reward_sample + round(20 * fs))];  % AfterConsumerdReward_10_sec
     [key_positions_sample(1) key_positions_sample(end - 1)];  % BeforeGoalZone
+    [key_positions_sample(end-1) after_reward_sample]; % DuringStim
     [key_positions_sample(1) key_positions_sample(end)];  % DuringMaze
     [max(recording_end_sample - 10 * fs, key_positions_sample(end)) recording_end_sample];  % HomeCageLast10sec
     [key_positions_sample(1) recording_end_sample]  % Total
@@ -59,6 +73,7 @@ interval_distances = [
     interval_distances;
     0;
     80;
+    20;
     100;
     100;
     0;
@@ -83,12 +98,26 @@ theta_dom_freq = zeros(nChans, numel(key_position_names));
 ripples_freq = zeros(nChans, numel(key_position_names));
 velocity = zeros(nChans, numel(key_position_names));
 
-wide_bands = exp(0.5:0.13:5.4);
-all_bands = exp(0.7:0.05:5.3);
-all_psd_xx = zeros(numel(all_bands) - 1, numel(key_position_names));
-wide_psd_xx = zeros(numel(wide_bands) - 1, numel(key_position_names));
+exp_bands = exp(0.7:0.05:5.3);
+all_bands = [2:1:15 exp_bands(43:end)];
+all_psd_xx = zeros((numel(all_bands) - 1), numel(key_position_names));
 
 for ch_i = 1:nChans
+    
+    % Filter for SWRs
+    psd_xx = dataArray(channels(ch_i),key_positions_sample(1):end);
+    passband = [80 250];
+    nyquist = fs / 2;
+    filterOrder = 4;
+    filterRipple = 20;
+    [b, a] = cheby2(filterOrder,filterRipple,passband/nyquist);
+    filtered = filtfilt(b, a, psd_xx);
+    times = (1:size(filtered,2)) / fs;
+    [ripples, ~, ~] = MyFindRipples(times', filtered', ...
+                                 'frequency', fs, ...
+                                 'thresholds', [2 3 0.01],...
+                                 'durations', [10 40 350]);
+    
     for i = 1:size(interval_indecies, 1)
         left_i = ceil(interval_indecies(i,1));
         right_i = ceil(interval_indecies(i,2));
@@ -99,39 +128,41 @@ for ch_i = 1:nChans
                 fprintf('Problem with tracking positions in file %s\n', tracking_filepath)
                 break
             end
-            pow_slow(ch_i, i) = pow_slow(ch_i, i - 1);
-            pow_theta(ch_i, i) = pow_theta(ch_i, i - 1);
-            pow_above_theta(ch_i, i) = pow_above_theta(ch_i, i - 1);
-            pow_slow_gamma(ch_i, i) = pow_slow_gamma(ch_i, i - 1);
-            pow_med_gamma(ch_i, i) = pow_med_gamma(ch_i, i - 1);
-            pow_fast_gamma(ch_i, i) = pow_fast_gamma(ch_i, i - 1);
-            dom_freq(ch_i, i) = dom_freq(ch_i, i-1);
-            theta_dom_freq(ch_i, i) = dom_freq(ch_i, i-1);
-            velocity(ch_i, i) = velocity(ch_i, i-1);
+%             pow_slow(ch_i, i) = pow_slow(ch_i, i - 1);
+%             pow_theta(ch_i, i) = pow_theta(ch_i, i - 1);
+%             pow_above_theta(ch_i, i) = pow_above_theta(ch_i, i - 1);
+%             pow_slow_gamma(ch_i, i) = pow_slow_gamma(ch_i, i - 1);
+%             pow_med_gamma(ch_i, i) = pow_med_gamma(ch_i, i - 1);
+%             pow_fast_gamma(ch_i, i) = pow_fast_gamma(ch_i, i - 1);
+%             dom_freq(ch_i, i) = dom_freq(ch_i, i-1);
+%             theta_dom_freq(ch_i, i) = dom_freq(ch_i, i-1);
+%             velocity(ch_i, i) = velocity(ch_i, i-1);
+            pow_slow(ch_i, i) = NaN;
+            pow_theta(ch_i, i) = NaN;
+            pow_above_theta(ch_i, i) = NaN;
+            pow_slow_gamma(ch_i, i) = NaN;
+            pow_med_gamma(ch_i, i) = NaN;
+            pow_fast_gamma(ch_i, i) = NaN;
+            dom_freq(ch_i, i) = NaN;
+            theta_dom_freq(ch_i, i) = NaN;
+            velocity(ch_i, i) = NaN;
             for j=1:(numel(all_bands)-1)
                 all_psd_xx(j, i) = all_psd_xx(j, i-1);
             end
-            for j=1:(numel(wide_bands)-1)
-                wide_psd_xx(j, i) = wide_psd_xx(j, i-1);
-            end
         else
             
+            if isempty(ripples)
+                section_ripples = [];
+            else
+                section_ripples = ripples(ripples(:,2) >= left_i/fs & ripples(:,2) <= right_i/fs,:);
+                section_ripples(:,1) = section_ripples(:,1) + time_mouse_arrived.sec(1);
+                section_ripples(:,2) = section_ripples(:,2) + time_mouse_arrived.sec(1);
+                section_ripples(:,3) = section_ripples(:,3) + time_mouse_arrived.sec(1);
+            end
+            section_sec = (right_i - left_i) / fs;
+            ripples_freq(ch_i,i) = size(section_ripples,1) / section_sec;
+
             psd_xx = dataArray(channels(ch_i),left_i:right_i);
-
-            % Filter for SWRs
-            passband = [100 250];
-            nyquist = fs / 2;
-            filterOrder = 4;
-            filterRipple = 20;
-            [b, a] = cheby2(filterOrder,filterRipple,passband/nyquist);
-            filtered = filtfilt(b, a, psd_xx);
-            times = (1:size(filtered,2)) / fs;
-            [ripples,sd, normalizedSquaredSignal] = MyFindRipples(times', filtered', ...
-                                         'frequency', fs, ...
-                                         'thresholds', [2 3.5 0.01],...
-                                         'durations', [30 20 300]);
-            ripples_freq(ch_i,i) = size(ripples,1) / (times(end) - times(1));
-
             %[pxx, freqs] = pwelch(psd_xx, ...
             %    floor(fs / 4), floor(fs / 8), floor(fs / 2), fs);
             [cws, freqs] = cwt(psd_xx, 'morse', fs);
@@ -143,7 +174,7 @@ for ch_i = 1:nChans
             dom_freq(ch_i, i) = freqs(maxValIndex);
             theta_dom_freq(ch_i, i) = DomFreqInBand(freqs, pxx, theta);
 
-            velocity(ch_i, i) = interval_distances(i) / (times(end) - times(1));
+            velocity(ch_i, i) = interval_distances(i) / section_sec;
             pow_slow(ch_i, i) = TotalBandPower(freqs, pxx, slow);
             pow_theta(ch_i, i) = TotalBandPower(freqs, pxx, theta);
             pow_above_theta(ch_i, i) = TotalBandPower(freqs, pxx, above_theta);
@@ -153,9 +184,6 @@ for ch_i = 1:nChans
             
             for j=1:(numel(all_bands)-1)
                 all_psd_xx(j, i) = TotalBandPower(freqs, pxx, [all_bands(j) all_bands(j+1)]);
-            end
-            for j=1:(numel(wide_bands)-1)
-                wide_psd_xx(j, i) = TotalBandPower(freqs, pxx, [wide_bands(j) wide_bands(j+1)]);
             end
         end
     end
@@ -176,7 +204,7 @@ pow_slow_gamma = array2table(pow_slow_gamma);
 pow_slow_gamma.Properties.VariableNames = strcat('pow_slow_gamma_', key_position_names);
 key_position_names = { 'StartZone',  'FirstArm', 'Junction', 'SecondArm', ...
     'GoalZone', 'AfterReachedReward_10sec', 'AfterConsumedReward_10_sec', ...
-    'BeforeGoalZone', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
+    'BeforeGoalZone', 'DuringStim', 'DuringMaze', 'HomeCageLast10sec', 'Total'};
 pow_med_gamma = array2table(pow_med_gamma);
 pow_med_gamma.Properties.VariableNames = strcat('pow_med_gamma_', key_position_names);
 
@@ -202,20 +230,14 @@ for j = (numel(key_position_names) - 1) : -1 : 1
             all_psd_xx(i,j) = all_psd_xx(i,j+1);
         end
     end
-    for i = 1:size(wide_psd_xx,1)
-        if wide_psd_xx(i,j) == 0
-            wide_psd_xx(i,j) = wide_psd_xx(i,j+1);
-        end
-    end
 end
 
 %%
 output.pow = [pow_slow pow_theta pow_above_theta pow_slow_gamma pow_med_gamma pow_fast_gamma dom_freq theta_dom_freq ripples_freq velocity];
 output.all_psd_xx = all_psd_xx ./ repmat(all_psd_xx(:,1), 1, numel(key_position_names));
-output.wide_psd_xx = wide_psd_xx ./ repmat(wide_psd_xx(:,1), 1, numel(key_position_names));
 output.psd_all_bands = all_bands;
-output.psd_wide_bands = wide_bands;
 output.channel = channel_names;
+%output.ntrials = ntrials;
 
 %% Show spectrogram
 if showspectrograms
@@ -247,7 +269,7 @@ end
 
 function [ pow ] = TotalBandPower(f1, pxx, band)
     filt_band = [max(min(f1), band(1)) min(max(f1), band(2))];
-    if filt_band(2) - filt_band(1) < 0.5
+    if filt_band(2) - filt_band(1) < 0.01
         pow = 0;
         return
     end

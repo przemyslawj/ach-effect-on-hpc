@@ -11,7 +11,7 @@ knitr::opts_chunk$set(include=FALSE, collapse=TRUE, warning=FALSE, echo=FALSE)
 
 Effects of the laser activation on the signal recorded in baseline conditions.
 
-The recordings session were divided into the ones where the mouse was immobile (asleep) and mobile (awake).
+The recordings session were divided into the ones where the mouse was immobile (sleep) and mobile (awake).
 
 Only one recording channel per animal is included for the comparisions. The channel was selected based on SNR, presence of theta oscillations when the mouse was mobile, and the number of detected ripples. The strength of the optogenetic activation could be different in each mouse, and also be different depending on the exact recording channel positions, so I showed the laser effects or each mouse separately.
 
@@ -36,13 +36,18 @@ img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/baseline/'
 
 In the baseline recordings, change visible on laser activation for low frequency oscillations. 
 
-Spectrogram of the signal from a session when mouse immobile is shown below. Laser was active from 20 to 40 sec.
-![](/home/prez/Dropbox/phd/ymaze_chat_x_ai32/img_gen/baseline/1_baseline_spectrum_k2.jpg)
+Two examples of spectrogram with the signal from a session when the mouse was immobile are shown below. Laser was active from 20 to 40 sec.
+
+![Mouse K2](/home/prez/Dropbox/phd/ymaze_chat_x_ai32/img_gen/baseline/1_baseline_spectrum_k2.jpg)
+
+
+![Mouse K4](/home/prez/Dropbox/phd/ymaze_chat_x_ai32/img_gen/baseline/1_baseline_spectrum_k4.jpg)
+
 
 ```{r include=FALSE}
 data_dir = '/mnt/DATA/Clara/baseline'
-#psddf = read_csv(paste0(data_dir,'/','psd_table_th35.csv'))
-psddf = read_csv(paste0(data_dir,'/','psd_table.csv'))
+psddf = read_csv(paste0(data_dir,'/','psd_table_th4.csv'))
+#psddf = read_csv(paste0(data_dir,'/','psd_table.csv'))
 electrodes.selected = read_csv('/mnt/DATA/Clara/ymaze/selected_electrodes.csv')
 psddf$animal = as.factor(psddf$animal)
 psddf$channel = as.factor(psddf$channel)
@@ -58,7 +63,8 @@ psddf$trial_id = as.factor(psddf$trial_id)
 
 
 ```{r include=FALSE}
-ripple.df = read_csv(paste0(data_dir,'/','ripples_th35.csv')) %>%
+ripple.df = read_csv(paste0(data_dir,'/','ripples_th4.csv')) %>%
+#ripple.df = read_csv(paste0(data_dir,'/','ripples.csv')) %>%
   mutate(trial_id=paste(date, animal, trial ,sep='_')) %>%
   #filter(state == 'sleep')
   filter(state != 'xx')
@@ -69,7 +75,7 @@ ripple.df$laserOn = as.factor(ripple.df$laserOn)
 
 ```{r}
 electrodes.selected$channel = as.factor(electrodes.selected$channel)
-best.ripple.df = left_join(ripple.df,electrodes.selected, ripple.df, by=c('animal', 'channel'))
+best.ripple.df = left_join(electrodes.selected, ripple.df, by=c('animal', 'channel'))
 best.psddf = left_join(electrodes.selected, psddf, by=c('animal', 'channel')) %>%
   filter(!is.na(trial_id))
 best.psddf$animal = as.factor(best.psddf$animal)
@@ -160,7 +166,9 @@ gbands = ggplot(animals.bands.df.filtered) +
 
 gbands
 ggsave(file=paste0(img_dir, '/', '2_baseline_psd_change.svg'), gbands, width=9, height=4)
+gbands + xlim(6,40)
 ```
+Increase in ~50Hz for K2 and others in sleep. Try to see if artifact or not by adding 50Hz noise and seeing how differs?
 
 ```{r}
 psddf.on = best.psddf %>%
@@ -216,6 +224,10 @@ my.paired.plot = function(paired.psddf.all, varname) {
 
 ```
 
+The oerall activity goes down, so more interesting would be rates of changes between bands.
+Should look at slow oscillatiosn (0-4 Hz) as well.
+
+K4 has an increase in theta band (8 - 12 Hz) on stimulation. Other mice have decrease in theta during sleep and there is no effect of the stimulation when awake.
 
 ```{r include=TRUE}
 gtheta = my.paired.plot(paired.psddf.all, 'pow_theta') +
@@ -226,6 +238,8 @@ gtheta
 ggsave(file=paste0(img_dir, '/', '3_baseline_theta_change.svg'), gtheta, width=9, height=4)
 ```
 
+Slow Gamma (25 - 35 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
+
 ```{r include=TRUE}
 gsgamma = my.paired.plot(paired.psddf.all, 'pow_slow_gamma') +
   ylab('Power slow gamma')
@@ -233,6 +247,8 @@ gsgamma
 ggsave(file=paste0(img_dir, '/', '4_baseline_sgamma_change.svg'), gsgamma, width=9, height=4)
 #wilcox.test(paired.psddf.on$pow_slow_gamma.fst, paired.psddf.on$pow_slow_gamma.snd, paired = TRUE)
 ```
+
+Fast Gamma (80 - 150 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
 
 ```{r include=TRUE}
 gfgamma = my.paired.plot(paired.psddf.all, 'pow_fast_gamma') +
@@ -248,7 +264,7 @@ ggsave(file=paste0(img_dir, '/', '5_baseline_fgamma_change.svg'), gfgamma, width
 my.paired.plot(paired.psddf.all, 'pow_above_theta')
 ```
 
-```{r include=TRUE}
+```{r }
 gtheta.over.slow = my.paired.plot(paired.psddf.all, 'theta_over_slow') +
   ylab('Ratio of theta over slower oscillations')
 gtheta.over.slow
@@ -258,7 +274,7 @@ ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.
 
 #Effect of the laser on ripples
 
-Ripples were automatically dected as events of duration 50-300 ms with power in 80-250 Hz band exceeding the threshold of 3.5 standard deviations. 
+Ripples were automatically dected as events of duration 40-350 ms with power in 80-250 Hz band exceeding the threshold of 3 standard deviations. 
 
 Example of a detected ripple is shown below
 The unprocessed signal is visible on the bottom panel, top panel shows the power in 80-250 Hz band with the marked ripple.
@@ -275,81 +291,132 @@ ripple.df %>%
 
 ```
 
-The detected events have their frequency peak around ~140Hz as expected in CA3
+The detected events have their frequency peak around ~120Hz as expected in CA3.
+TODO: present as percentages
+
 ```{r include=TRUE}
 best.ripple.df %>%
   ggplot() +
-  geom_histogram(aes(x=peak_freq, color=state), fill='white', alpha=0.4)
+  geom_histogram(aes(x=peak_freq, color=state), fill='white', alpha=0.4) +
+  scale_x_continuous(breaks=c(100, 120, 140, 160, 180, 200))
 
 ```
 
-However, ripple Incidence is not affected by laser stimulation
+```{r}
+paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
+  Y = psddf.all %>%
+    select(trial_id, state, cond.name, var.name) 
+  paired.swr = unstack(Y, formula(paste0(var.name, ' ~ ', cond.name )))
+  wilcox.test(paired.swr[[1]], paired.swr[[2]], paired=paired, alternative='greater')
+}
+test_val=paired.swr.wilcox(psddf.all, 'swr_incidence', 'desc')
+```
+
+Ripple incidence is significantly lowered by the laser stimulation (paired Wilcoxon test, p-value=`r test_val$p.value`), the effect is more prominent in sleep.
+
+```{r include=TRUE}
+ggplot(psddf.all) +
+    geom_boxplot(aes(x=desc, y=swr_incidence, fill=desc), notch=FALSE) +
+    facet_grid(. ~ state) +
+    #geom_point(size=1) +
+    xlab('Laser')
+```
+
+Paired comparison of ripple incidence during the same trial shows the effect of laser is less prominent in some of the individual awake mice.
+
 ```{r include=TRUE}
 my.paired.plot(paired.psddf.all, 'swr_incidence') +
   ylab('Ripple incidence (Hz)')
 ```
 
 
-There is no difference in the peak frequency of the ripples after the laser activation
+After the laser activation there is fewer of the ripples at the high-frequency spectrum.
+TODO: how many points in the boxplot, maybe add jittered points
+
 ```{r include=TRUE}
 #The events detected 
 #best.ripple.df = filter(best.ripple.df, peak_freq >= 140)
 best.ripple.df %>%
+  filter(!is.na(state)) %>%
   ggplot() +
   geom_boxplot(aes(x=animal, y=peak_freq, col=laserOn))  +
   facet_grid(. ~ state) +
   ylab('Peak Frequency (Hz)') + xlab('Animal')
   #geom_jitter(aes(x=animal, y=peak_freq,col=laserOn), width=0.1)
+
+kruskal.test(peak_freq~laserOn, data=best.ripple.df)
 ```
 
-There is no difference in duration of fast oscillatory events after the laser activation
+Detected ripples are shorter during the laser activation -- shorter tail of long duration ripples can be observed in the histogram.
+TODO: relative percentages rather than counts.
+
 ```{r include=TRUE}
+best.ripple.df = best.ripple.df %>%
+  mutate(ripple_dur = end_time-start_sec)
+
 best.ripple.df %>%
+  filter(!is.na(state)) %>%
+  ggplot() +
+  geom_histogram(aes(x=ripple_dur, group=laserOn, col=laserOn, fill=laserOn), alpha=0.5) +
+  xlab('Ripple duration (sec)') + ylab('#Ripples')
+
+best.ripple.df %>%
+  filter(!is.na(state)) %>%
   ggplot() +
   facet_grid(. ~ state) +
-  geom_boxplot(aes(x=animal, y=end_time-start_sec, col=laserOn)) +
+  geom_boxplot(aes(x=animal, y=ripple_dur, col=laserOn)) +
   ylab('Ripple duration (sec)') + xlab('Animal')
+
+kruskal.test(ripple_dur~laserOn, data=best.ripple.df)
 ```
 
+
+Histogram of the ripples over time - the laser active at 20-40 sec
+
 ```{r}
-best.ripple.df %>%
-  ggplot() +
-  geom_jitter(aes(x=trial_id, y=peakpow,col=laserOn), width=0.01) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+bin_dur = 2
+best.ripple.df = best.ripple.df %>%
+  mutate(bin=floor(peak_t / bin_dur))
+
+df = best.ripple.df %>% 
+  filter(date=='2018-09-05') %>%
+  filter(animal %in% c('K1', 'K2', 'K3', 'K4')) %>%
+  filter(!is.na(trial_id)) %>%
+  mutate(nripples=1)
+
+max_bin = max(df$bin)
+trials = unique(df$trial_id)
+binned.template = data.frame(trial_id=rep(trials, each=max_bin),
+                             bin=rep(1:max_bin, length(trials)),
+                             nripples=rep(0, length(trials)))
+binned.ripple.df = df %>%
+  right_join(binned.template, by=c('trial_id', 'bin')) %>%
+  mutate(trial_id2=trial_id) %>%
+  separate(trial_id2, c('date', 'animal', 'trial'), sep='_')
+binned.ripple.df$animal = as.factor(binned.ripple.df$animal)
+binned.ripple.df$date = as.factor(binned.ripple.df$date)
+binned.ripple.df$trial = as.integer(binned.ripple.df$trial)
+
+binned.ripple.df = binned.ripple.df %>%
+  group_by(trial_id, animal, date, trial, bin) %>%
+  summarise(nripples.total = sum(nripples.x, na.rm=TRUE) + sum(nripples.y, na.rm=TRUE),
+            incidence = nripples.total / bin_dur)
+binned.ripple.df$bin = as.factor(binned.ripple.df$bin * bin_dur)
 ```
 
-```{r}
-#Bin the ripples and check 
-bin_dur = 10
-binned.ripples = best.ripple.df %>%
-  filter(animal == 'K1') %>%
-  filter(state == 'sleep') %>%
-  mutate(bin=floor(peak_t/bin_dur)) %>%
-  filter(peak_t < 60.0)
-#binned.ripples$bin = as.factor(binned.ripples$bin)
+TODO: This could be per mouse and shown as distribution of ripples.
 
-binned.ripples.cnt = binned.ripples %>%
-  group_by(animal,trial_id, bin, laserOn) %>%
-  summarise(nripple=n(), ripple_incidence=nripple/bin_dur)
+```{r include=TRUE}
+incidence.summary = binned.ripple.df %>%
+  group_by(bin) %>%
+  summarise(mincidence = mean(incidence, na.rm = TRUE),
+            incidence.sd = sd(incidence, na.rm = TRUE))
 
-binned.ripples.cnt %>%
-  ggplot() +
-  geom_point(aes(bin, ripple_incidence, color=laserOn), width=0.1) +
-  geom_line(aes(x=bin, y=ripple_incidence, group=trial_id), size=0.3, alpha=0.4)  
-  
-```
 
-```{r}
-#Paired comparison of two bins:
-binned.fst = filter(binned.ripples.cnt, bin==0) 
-binned.snd = filter(binned.ripples.cnt, bin==2) 
-binned.paired = full_join(binned.fst, binned.snd, by='trial_id', suffix=c('.before', '.after')) %>%
-  mutate(animal = ifelse(is.na(animal.before), animal.after, animal.before),
-         ripple_incidence.before = ifelse(is.na(ripple_incidence.before), 0, ripple_incidence.before),
-         ripple_incidence.after = ifelse(is.na(ripple_incidence.after), 0, ripple_incidence.after))
-ggpaired(binned.paired, cond1='ripple_incidence.before', cond2='ripple_incidence.after',
-         fill='condition', line.size=0.4, line.color='gray') + 
-  facet_grid(. ~ animal)
-       
+ggplot(incidence.summary, aes(x=bin, y=mincidence)) +
+  geom_col(aes(x=bin, y=mincidence), fill='blue') +
+  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd)) +
+  ylab('Ripple incidence (Hz)') +
+  xlab('Time (sec)')
 ```
 

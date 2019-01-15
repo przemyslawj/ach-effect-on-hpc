@@ -23,7 +23,7 @@ key_positions_percent = [0 45 90 120 165 reward_percent];
 key_positions_sec = zeros(size(key_positions_percent));
 for i = 1:numel(key_positions_percent)
     j = find(tracking_dat_filtered.total_percent > key_positions_percent(i), 1);
-    if isempty(j)
+    if isempty(j) || j == 0
         j = numel(tracking_dat_filtered.time_sec);
     end
     key_positions_sec(i) = tracking_dat_filtered.time_sec(j);
