@@ -1,0 +1,397 @@
+---
+title: "Effect of cholinergic stimulation on CA3"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(include=FALSE, collapse=TRUE, warning=FALSE, echo=FALSE)
+```
+
+```{r include=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(cowplot)
+library(ggpubr)
+select = dplyr::select
+```
+
+
+```{r include=FALSE}
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=11, family = 'Arial'), axis.text = element_text(size=11)) 
+
+col_width = 8.5 * 4/3
+img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/urethane/'
+```
+
+
+```{r include=FALSE}
+data_dir = '/mnt/DATA/Clara/urethane'
+psddf.light = read_csv(paste0(data_dir,'/','psd_table_urethane_light.csv')) %>%
+  mutate(cond = 'Light') %>%
+  filter(trial != 7)
+psddf.scopolamine = read_csv(paste0(data_dir,'/','psd_table_urethane_scopolamine.csv')) %>%
+  mutate(cond = 'Scopolamine') %>%
+  filter(trial != 1)
+psddf.nolight = read_csv(paste0(data_dir,'/','psd_table_urethane_no_light.csv')) %>%
+  mutate(cond = 'No_light') 
+
+psddf = bind_rows(psddf.light, psddf.scopolamine)
+
+psddf$cond = as.factor(psddf$cond)
+psddf$laserOn = as.factor(psddf$laserOn)
+
+psddf = mutate(psddf, trial_id=paste(cond, trial ,sep='_')) 
+  
+psddf$trial_id = as.factor(psddf$trial_id)
+```
+
+
+```{r include=FALSE}
+ripple.df.light = read_csv(paste0(data_dir,'/','ripples_urethane_light.csv')) %>%
+  mutate(cond = 'Light') %>%
+  filter(trial != 7)
+ripple.df.scopolamine = read_csv(paste0(data_dir,'/','ripples_urethane_scopolamine.csv')) %>%
+  mutate(cond = 'Scopolamine') %>%
+  filter(trial != 1)
+ripple.df.nolight = read_csv(paste0(data_dir,'/','ripples_urethane_no_light.csv')) %>%
+  mutate(cond = 'No_light') 
+
+ripple.df = bind_rows(ripple.df.light, ripple.df.scopolamine) %>%
+  mutate(trial_id=paste(cond, trial ,sep='_')) %>%
+  #filter(state == 'sleep')
+  filter(trial != 'xx')
+ripple.df$cond = as.factor(ripple.df$cond)
+ripple.df$laserOn = as.factor(ripple.df$laserOn)
+```
+
+
+
+# Effects on the signal spectrum
+```{r}
+psddf = mutate(psddf, 
+               theta_over_slow = pow_theta / pow_slow,
+               theta_over_supratheta = pow_theta / pow_above_theta)
+```
+
+```{r}
+sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
+```
+
+
+```{r include=TRUE}
+
+mean.wona = function(X) {
+  mean(X, na.rm=TRUE)
+}
+
+sd.wona = function(X) {
+  sd(X, na.rm=TRUE)
+}
+
+animals.bands.df = data.frame()
+for (cond_name in levels(psddf$cond)) {
+  animal.df = filter(psddf, cond == cond_name) %>%
+    arrange(row)
+  animal.df$trial_id_num = as.integer(animal.df$trial_id)
+  animal.psd.cols = animal.df %>% 
+    select(trial_id_num, starts_with('all_psd_xx')) 
+  dm = as.matrix(animal.psd.cols)
+  nbands = dim(dm)[2]
+  nrows = dim(dm)[1]
+  dm.diff = matrix(rep(0, nbands * nrows/3), ncol=nbands)
+  if (nrows > 0) {
+    for (i in 1:(nrows/3)) {
+      denom = dm[3*i-2,]
+      nom = dm[3*i-1,]
+      for (j in 1:length(denom)) {
+        if (denom[j] == 0) {
+          denom[j] = dm[3*i-1,j]
+        }
+        if (nom[j] == 0) {
+          nom[j] = NA
+        }
+      }
+      dm.diff[i,] = nom / denom * 100 - 100
+    }
+  }
+  #last_row = which(dm.diff[,1] != 1)[1] - 1
+  means = apply(dm.diff[,2:nbands], 2,FUN=mean.wona)
+  sds = apply(dm.diff[,2:nbands], 2,FUN=sem)
+  
+  bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
+  bands.df = data.frame(band=bands[1:(nbands-2)],
+                        mchange=means[1:(nbands-2)],
+                        sdchange=sds[1:(nbands-2)],
+                        cond=rep(cond_name,nbands-2))
+  
+  animals.bands.df = rbind(animals.bands.df, bands.df)
+}
+
+axis.breaks=c(1:9,seq(10,100,10))
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+gbands = ggplot(animals.bands.df) +
+  geom_line(aes(x=band, y=mchange, colour=cond), size=1) +
+  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=cond), alpha=0.1)+
+  geom_hline(yintercept=1, linetype='dashed') +
+  #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
+  gtheme +
+  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power change (%)') +
+  labs(colour = "") +
+  theme(legend.position = 'top')  
+
+gbands
+ggplot2::ggsave(file=paste0(img_dir, '/', '2_urethane_psd_change.svg'), gbands, width=11, height=8, units='cm')
+#gbands + xlim(0,30)
+```
+Increase in ~50Hz for K2 and others in sleep. Try to see if artifact or not by adding 50Hz noise and seeing how differs?
+
+```{r}
+psddf.on = psddf %>%
+  group_by(trial_id) %>%
+  filter(laserOn==1) %>%
+  top_n(1) %>%
+  mutate(desc='2_stim')
+
+psddf.off = psddf %>%
+  group_by(trial_id) %>%
+  filter(laserOn==0) %>%
+  slice(1)  %>%
+  mutate(desc='1_before')
+
+paired.psddf.on = left_join(psddf.off, psddf.on, by='trial_id', suffix=c('.fst', '.snd')) %>%
+  mutate(change='on')
+
+psddf.off2 = psddf %>%
+  group_by(trial_id) %>%
+  filter(laserOn==0) %>%
+  dplyr::slice(2) %>%
+  mutate(desc='3_after')
+
+psddf.all = bind_rows(psddf.on, psddf.off, psddf.off2)
+psddf.all$desc = factor(psddf.all$desc, levels=c('1_before','2_stim','3_after'))
+
+paired.psddf.off = left_join(psddf.on, psddf.off2, by='trial_id', suffix=c('.fst', '.snd')) %>%
+  mutate(change='off')
+```
+
+```{r}
+
+paired.psddf.all = psddf.all %>%
+  mutate(paired_group=interaction(cond, desc, lex.order=TRUE))
+paired.psddf.all$paired_group = as.factor(paired.psddf.all$paired_group)
+paired.psddf.all$paired_group_num=as.integer(paired.psddf.all$paired_group)
+```
+
+```{r}
+my.paired.plot = function(paired.psddf, varname, norm=TRUE) {
+  if (norm == TRUE) {
+    var.psddf = filter(paired.psddf, desc == '1_before') %>%
+      rename_(total_value=varname) %>%
+      right_join(paired.psddf, by='trial_id', suffix=c('.y','')) %>%
+      filter(total_value > 0) %>%
+      rename_(value=varname) %>%
+      mutate(plotted_value = value / total_value) 
+  } else{
+    var.psddf = rename_(paired.psddf, plotted_value=varname)
+  }
+  
+  
+  ncond = length(levels(paired.psddf$cond))
+  g = ggplot(var.psddf, aes(x=paired_group_num, y=plotted_value)) +
+    geom_boxplot(aes(x=paired_group_num, group=paired_group_num, fill=desc), notch=FALSE) +
+    geom_point(size=1) +
+    geom_line(aes(group=trial_id), size=0.3, alpha=0.4) + 
+    scale_x_continuous(breaks = seq(2,ncond*3,3), labels = levels(var.psddf$cond)) +
+    xlab('Condition')
+  return(g)
+}
+# varname = 'pow_theta'
+# total.psddf = filter(paired.psddf.all, desc == '1_before') %>%
+#   rename_(total_value=varname) %>%
+#   right_join(paired.psddf.all, by='trial_id', suffix=c('.y','')) %>%
+#   filter(total_value > 0) %>%
+#   rename_(value=varname) %>%
+#   mutate(plotted_value = value / total_value)  %>%
+#   select(trial_id, desc, laserOn, value, plotted_value)
+# 
+
+
+
+```
+
+
+```{r include=TRUE}
+gtheta = my.paired.plot(paired.psddf.all, 'pow_theta') +
+  ylab('Power theta')
+gtheta
+#wilcox.test(paired.psddf.on$pow_theta.fst, paired.psddf.on$pow_theta.snd, paired = TRUE)
+
+ggsave(file=paste0(img_dir, '/', '3_baseline_theta_change.svg'), gtheta, width=9, height=4)
+```
+
+Slow Gamma (25 - 35 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
+
+```{r include=TRUE}
+gsgamma = my.paired.plot(paired.psddf.all, 'pow_slow_gamma') +
+  ylab('Power slow gamma')
+gsgamma
+ggsave(file=paste0(img_dir, '/', '4_baseline_sgamma_change.svg'), gsgamma, width=9, height=4)
+#wilcox.test(paired.psddf.on$pow_slow_gamma.fst, paired.psddf.on$pow_slow_gamma.snd, paired = TRUE)
+```
+
+Fast Gamma (80 - 150 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
+
+```{r include=TRUE}
+gfgamma = my.paired.plot(paired.psddf.all, 'pow_fast_gamma') +
+  ylab('Power fast gamma')
+gfgamma
+ggsave(file=paste0(img_dir, '/', '5_baseline_fgamma_change.svg'), gfgamma, width=9, height=4)
+#wilcox.test(paired.psddf.on$pow_fast_gamma.fst, paired.psddf.on$pow_fast_gamma.snd, paired = TRUE)
+```
+
+
+
+```{r }
+gtheta.over.slow = my.paired.plot(paired.psddf.all, 'theta_over_slow', norm = FALSE) +
+  ylab('Ratio of theta over slower oscillations')
+gtheta.over.slow
+ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.slow, width=9, height=4)
+```
+
+
+#Effect of the laser on ripples
+
+
+The detected events have their frequency peak around ~120Hz as expected in CA3.
+TODO: present as percentages
+
+```{r include=TRUE}
+ripple.df %>%
+  ggplot() +
+  geom_histogram(aes(x=peak_freq, color=cond, y=..density..), fill='white', alpha=0.4) +
+  scale_x_continuous(breaks=c(100, 120, 140, 160, 180, 200))
+
+```
+
+```{r}
+paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
+  Y = psddf.all %>%
+    select(trial_id, cond, cond.name, var.name) 
+  paired.swr = unstack(Y, formula(paste0(var.name, ' ~ ', cond.name )))
+  wilcox.test(paired.swr[[1]], paired.swr[[2]], paired=paired, alternative='greater')
+}
+test_val=paired.swr.wilcox(psddf.all, 'swr_incidence', 'desc')
+test_val
+```
+
+Paired comparison of ripple incidence during the same trial shows the effect of laser is less prominent in some of the individual awake mice.
+
+```{r include=TRUE}
+my.paired.plot(paired.psddf.all, 'swr_incidence') +
+  ylab('Ripple incidence (Hz)')
+```
+
+
+After the laser activation there is fewer of the ripples at the high-frequency spectrum.
+TODO: how many points in the boxplot, maybe add jittered points
+
+```{r include=TRUE}
+#The events detected 
+#best.ripple.df = filter(best.ripple.df, peak_freq >= 140)
+ripple.df %>%
+  ggplot() +
+  geom_boxplot(aes(x=cond, y=peak_freq, col=laserOn))  +
+  ylab('Peak Frequency (Hz)') + xlab('Animal')
+  #geom_jitter(aes(x=animal, y=peak_freq,col=laserOn), width=0.1)
+
+kruskal.test(peak_freq~laserOn, data=best.ripple.df)
+```
+
+Detected ripples are shorter during the laser activation -- shorter tail of long duration ripples can be observed in the histogram.
+TODO: relative percentages rather than counts.
+
+```{r include=TRUE}
+ripple.df = ripple.df %>%
+  mutate(ripple_dur = end_time-start_sec)
+
+ripple.df %>%
+  ggplot() +
+  geom_histogram(aes(x=ripple_dur, group=laserOn, col=laserOn, fill=laserOn), alpha=0.5) +
+  xlab('Ripple duration (sec)') + ylab('#Ripples')
+
+ripple.df %>%
+  ggplot() +
+  geom_boxplot(aes(x=cond, y=ripple_dur, col=laserOn)) +
+  ylab('Ripple duration (sec)') + xlab('Animal')
+
+kruskal.test(ripple_dur~laserOn, data=best.ripple.df)
+```
+
+
+Histogram of the ripples over time - the laser active at 20-40 sec
+
+```{r}
+bin_dur = 5
+ripple.df = ripple.df %>%
+  mutate(bin=ceiling(peak_t / bin_dur))
+
+df = ripple.df %>% 
+  mutate(nripples=1)
+
+max_bin = max(df$bin)
+trials = unique(df$trial_id)
+binned.template = data.frame(trial_id=rep(trials, each=max_bin),
+                             bin=rep(1:max_bin, length(trials)),
+                             nripples=rep(0, length(trials)))
+binned.ripple.df = df %>%
+  right_join(binned.template, by=c('trial_id', 'bin')) %>%
+  mutate(trial_id2=trial_id) %>%
+  separate(trial_id2, c('cond', 'trial'), sep='_')
+binned.ripple.df$cond = as.factor(binned.ripple.df$cond)
+binned.ripple.df$trial = as.integer(binned.ripple.df$trial)
+
+binned.ripple.df = binned.ripple.df %>%
+  group_by(trial_id, cond, trial, bin) %>%
+  summarise(nripples.total = sum(nripples.x, na.rm=TRUE) + sum(nripples.y, na.rm=TRUE),
+            incidence = nripples.total / bin_dur) %>%
+  mutate(bin = bin * bin_dur,
+         laserOn = (bin > 15 & bin <= 45))
+binned.ripple.df$bin = as.integer(binned.ripple.df$bin)
+```
+
+
+```{r include=TRUE}
+
+cond_name = 'Scopolamine'
+incidence.summary = binned.ripple.df %>%
+  filter(cond == cond_name) %>%
+  group_by(bin, cond, laserOn) %>%
+  summarise(mincidence = mean(incidence, na.rm = TRUE),
+            incidence.sd = sem(incidence))
+
+
+g = ggplot(incidence.summary, aes(x=bin, y=mincidence)) +
+  geom_col(aes(x=bin, y=mincidence), fill='gray', colour='black') +
+  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd)) +
+  ylab('Ripple\nincidence (Hz)') +
+  xlab('Time (sec)') +
+  #scale_fill_manual(values = c("grey", "#56B4E9")) +
+  scale_x_continuous(breaks=seq(15,50,15), minor_breaks=seq(5,55,5))  +
+  gtheme +
+  theme(legend.position = 'none') 
+
+g
+ggsave(file=paste0(img_dir, '/', '2_ripple_incidence', cond_name, '.svg'), width=12, height=4, units='cm')
+
+```
+

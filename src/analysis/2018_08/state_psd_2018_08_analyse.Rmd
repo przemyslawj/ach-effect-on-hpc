@@ -29,12 +29,12 @@ select = dplyr::select
 
 
 ```{r include=FALSE}
-gtheme = theme_minimal() + theme_cowplot() + 
-  theme(text = element_text(size=20), axis.text = element_text(size=16)) 
+gtheme = theme_minimal() + theme_cowplot() +
+  theme(text = element_text(size=20), axis.text = element_text(size=16))
 img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/baseline/'
 ```
 
-In the baseline recordings, change visible on laser activation for low frequency oscillations. 
+In the baseline recordings, change visible on laser activation for low frequency oscillations.
 
 Two examples of spectrogram with the signal from a session when the mouse was immobile are shown below. Laser was active from 20 to 40 sec.
 
@@ -84,7 +84,7 @@ best.psddf$animal = as.factor(best.psddf$animal)
 
 # Effects on the signal spectrum
 ```{r}
-best.psddf = mutate(best.psddf, 
+best.psddf = mutate(best.psddf,
                     theta_over_slow = pow_theta / pow_slow,
                     theta_over_supratheta = pow_theta / pow_above_theta)
 ```
@@ -92,10 +92,10 @@ best.psddf = mutate(best.psddf,
 
 Effects of the laser on signal spectrum:
 
-* for one animal (K4): 
+* for one animal (K4):
     + increase in theta and ratio of theta over slower oscillations
     + decrease in slow and fast gamma power
-* for other animals 
+* for other animals
     + when the animal immobile: decrease in theta, slow gamma and fast gamma power
     + when the animal mobile no difference in the power of those frequency bands
 
@@ -117,8 +117,8 @@ for (animal_name in levels(best.psddf$animal)) {
   for (state_name in levels(best.psddf$state)) {
     animal.df = filter(best.psddf, animal == animal_name, state == state_name)
     animal.df$trial_id_num = as.integer(animal.df$trial_id)
-    animal.psd.cols = animal.df %>% 
-      select(trial_id_num, starts_with('all_psd_xx')) 
+    animal.psd.cols = animal.df %>%
+      select(trial_id_num, starts_with('all_psd_xx'))
     dm = as.matrix(animal.psd.cols)
     nbands = dim(dm)[2]
     nrows = dim(dm)[1]
@@ -141,14 +141,14 @@ for (animal_name in levels(best.psddf$animal)) {
     #last_row = which(dm.diff[,1] != 1)[1] - 1
     means = apply(dm.diff[,2:nbands], 2,FUN=mean.wona)
     sds = apply(dm.diff[,2:nbands], 2,FUN=sd.wona)
-    
+
     bands = exp(seq(0.7, 5.30, by=0.05))
     bands.df = data.frame(band=bands[1:(nbands-2)],
                           mchange=means[1:(nbands-2)],
                           sdchange=sds[1:(nbands-2)],
                           animal=rep(animal_name,nbands-2),
                           state=rep(state_name,nbands-2))
-    
+
     animals.bands.df = rbind(animals.bands.df, bands.df)
   }
 }
@@ -180,7 +180,7 @@ psddf.on = best.psddf %>%
 psddf.off = best.psddf %>%
   group_by(trial_id) %>%
   filter(laserOn==0) %>%
-  top_n(1)  %>%
+  slice(1)  %>%
   mutate(desc='1_before')
 
 paired.psddf.on = left_join(psddf.off, psddf.on, by='trial_id', suffix=c('.fst', '.snd')) %>%
@@ -214,7 +214,7 @@ my.paired.plot = function(paired.psddf.all, varname) {
     geom_boxplot(aes(x=paired_group_num, group=paired_group_num, fill=desc), notch=FALSE) +
     #geom_point(size=1) +
     geom_jitter(size=1, width=0.1, height=0) +
-    geom_line(aes(group=trial_id), size=0.3, alpha=0.4) + 
+    geom_line(aes(group=trial_id), size=0.3, alpha=0.4) +
     facet_grid(. ~ state) +
     scale_x_continuous(breaks = seq(2,nanimals*3,3), labels = levels(paired.psddf.all$animal)) +
     xlab('Animal')
@@ -274,7 +274,7 @@ ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.
 
 #Effect of the laser on ripples
 
-Ripples were automatically dected as events of duration 40-350 ms with power in 80-250 Hz band exceeding the threshold of 3 standard deviations. 
+Ripples were automatically dected as events of duration 40-350 ms with power in 80-250 Hz band exceeding the threshold of 3 standard deviations.
 
 Example of a detected ripple is shown below
 The unprocessed signal is visible on the bottom panel, top panel shows the power in 80-250 Hz band with the marked ripple.
@@ -305,7 +305,7 @@ best.ripple.df %>%
 ```{r}
 paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
   Y = psddf.all %>%
-    select(trial_id, state, cond.name, var.name) 
+    select(trial_id, state, cond.name, var.name)
   paired.swr = unstack(Y, formula(paste0(var.name, ' ~ ', cond.name )))
   wilcox.test(paired.swr[[1]], paired.swr[[2]], paired=paired, alternative='greater')
 }
@@ -334,7 +334,7 @@ After the laser activation there is fewer of the ripples at the high-frequency s
 TODO: how many points in the boxplot, maybe add jittered points
 
 ```{r include=TRUE}
-#The events detected 
+#The events detected
 #best.ripple.df = filter(best.ripple.df, peak_freq >= 140)
 best.ripple.df %>%
   filter(!is.na(state)) %>%
@@ -378,7 +378,7 @@ bin_dur = 2
 best.ripple.df = best.ripple.df %>%
   mutate(bin=floor(peak_t / bin_dur))
 
-df = best.ripple.df %>% 
+df = best.ripple.df %>%
   filter(date=='2018-09-05') %>%
   filter(animal %in% c('K1', 'K2', 'K3', 'K4')) %>%
   filter(!is.na(trial_id)) %>%

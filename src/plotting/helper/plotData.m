@@ -8,7 +8,7 @@ function [] = plotData(fs, raw, filtered, spikeFiltered, ...
     
     subplot(4,1,1);
     plotSWR(times, filtered(indecies), fs, ripple_starts, ripple_ends);
-    ylim([-0.05 0.05]);
+    %ylim([-0.05 0.05]);
 
     subplot(4,1,2);
     plot(times, normalizedSquaredSignal(indecies));
