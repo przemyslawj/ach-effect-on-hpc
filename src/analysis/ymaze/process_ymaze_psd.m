@@ -14,6 +14,7 @@ animals_dat = [...
  ];
 
 %%
+all_ripples = [];
 animal_names = fields(animals_dat);
 for field_i = 1:numel(animal_names)
     animal_name = animal_names{field_i};
@@ -25,6 +26,7 @@ for field_i = 1:numel(animal_names)
             all_psd = cat(3, all_psd, animal_dat.all_psd);
             total_trials = total_trials + animal_dat.ntrials;
         end
+        all_ripples = [all_ripples; animal_dat.ripples];
     end
     %wide_psd = wide_psd ./ total_trials;
     %wide_psdtable = psd2table(wide_psd, animal_dat.psd_wide_bands, key_position_names);
@@ -38,6 +40,7 @@ for field_i = 1:numel(animal_names)
     writetable(std_psdtable, ['std_psd_' animal_name '.csv']);
 end
 
+writetable(all_ripples, ['all_ripples' '.csv']);
 %%
 
 

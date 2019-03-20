@@ -1,0 +1,205 @@
+---
+title: "Ymaze learning"
+output: html_notebook
+---
+
+```{r }
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(tidyr)
+library(stringr)
+library(PairedData)
+select = dplyr::select
+```
+
+```{r}
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=11, family = 'Arial'), axis.text = element_text(size=11)) 
+data_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/data/'
+img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/ymaze/'
+```
+
+```{r}
+sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
+```
+
+```{r}
+df.raw = read_csv(paste0(data_dir, 'learning_perf.csv'))
+df = gather(df.raw, 'mouse.id', 'correct', 2:ncol(df.raw)) %>%
+  filter(!is.na(correct)) %>%
+  filter(mouse.id != 0) %>%
+  separate(mouse.id, c('cond', 'n', 'mouse.no'), sep='[_(]') %>%
+  select(-n) %>%
+  mutate(mouse.no=ifelse(is.na(mouse.no),0,mouse.no),
+         cond=str_trim(cond))
+
+df$day = as.factor(df$day)
+df$cond = as.factor(df$cond)
+df$correct = as.integer(df$correct)
+df$mouse.no = as.integer(df$mouse.no)
+
+```
+
+```{r}
+levels.prev = levels(df$cond)
+df$cond = factor(df$cond, levels=levels.prev[c(2,1,4,3)])
+```
+
+```{r}
+df %>%
+  ggplot() +
+  #geom_boxplot(aes(x=day, y=correct, colour=cond))
+  geom_boxplot(aes(x=day, y=correct, colour=cond)) +
+  gtheme +
+  theme(legend.position='top') +
+  labs(colour='', fill='') +
+  xlab('Day') + ylab('Correct (%)')
+```
+
+```{r}
+df %>%
+  group_by(day,cond) %>%
+  summarise(mcorrect=mean(correct), semcorrect=sem(correct)) %>%
+  ggplot(aes(x=day, y=mcorrect, group=cond)) +
+  geom_line(aes(colour=cond, group=cond)) +
+  geom_point(aes(colour=cond, group=cond)) +
+  #geom_errorbar(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect), width=0.2) +
+  geom_ribbon(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect, fill=cond), alpha=0.1) +
+  geom_hline(yintercept = 50, linetype='dashed') +
+  gtheme +
+  theme(legend.position='none') +
+  labs(colour='', fill='') +
+  xlab('Day') + ylab('Correct (%)')
+ggsave(paste0(img_dir, 'learning_curve.svg'), width=8, height=7.5, units='cm')
+  
+```
+
+
+
+Reached learning criterion?
+```{r}
+
+which.day.learnt = function(correct_pct, learning.crit) {
+  days=length(correct_pct):1
+  for (day in days) {
+    if (correct_pct[day] < learning.crit) {
+      return(day+1)
+    }
+  }
+  return(day)
+}
+
+df.learnt = df %>% 
+  group_by(cond, mouse.no) %>%
+  arrange(day) %>%
+  summarise(learnt.90=which.day.learnt(correct, 90),
+            learnt.80=which.day.learnt(correct, 80),
+            learnt.70=which.day.learnt(correct, 70)) %>%
+  gather(key='criterion', value='learnt.day', 3:5)
+
+df.learnt.80 = filter(df.learnt, criterion == 'learnt.80')
+df.learnt.90 = filter(df.learnt, criterion == 'learnt.90')
+```
+
+
+```{r}
+library(ggpubr)
+df.learnt %>%
+  filter(criterion == 'learnt.80') %>%
+  #ggplot(aes(x=cond, y=learnt.day)) +
+  #geom_boxplot(aes(colour=cond), outlier.size=0) +
+  ggpubr::ggboxplot(x='cond', y='learnt.day', color = 'cond' ) +
+  geom_dotplot(aes(fill=cond), binaxis="y", stackdir="center", 
+               binwidth=0.2, dotsize=1, stackratio=0.8, alpha=0.7) +
+  stat_compare_means(aes(label = paste0('p=', ..p.format..)),
+                     method='wilcox.test',
+                     comparisons=list(c(1,3), c(1,4)),
+                     label.y=c(6.5,7.4)) +
+  gtheme +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1)) +
+  xlab('') + ylab('Days until learned (≥ 80 %)') +
+  theme(legend.position = 'none') 
+
+ggsave(paste0(img_dir, 'learnt_boxplot.svg'), width=7, height=10, units='cm')
+```
+
+```{r}
+df.learnt.rew = filter(df.learnt, cond %in% c('No light', 'Reward'))
+df.learnt.throughout = filter(df.learnt, cond %in% c('No light', 'Throughout maze'))
+wilcox.test(learnt.day ~ cond, df.learnt.throughout, subset = criterion=='learnt.80')
+wilcox.test(learnt.day ~ cond, df.learnt.rew, subset = criterion=='learnt.80')
+```
+
+```{r}
+kruskal.test(learnt.day ~ cond, df.learnt, subset=criterion=='learnt.80')
+library(FSA)
+dunnTest(learnt.day ~ cond, df.learnt.80, method='none')
+dunnTest(learnt.day ~ cond, df.learnt.90, method='none')
+
+```
+
+# Wild type test
+```{r}
+wtdf.raw = read_csv(paste0(data_dir, 'wt_learning_perf.csv'))
+wtdf = gather(wtdf.raw, 'mouse.id', 'correct', 2:ncol(wtdf.raw)) %>%
+  filter(!is.na(correct)) %>%
+  filter(mouse.id != 0) %>%
+  separate(mouse.id, c('cond', 'n', 'mouse.no'), sep='[_(]') %>%
+  select(-n) %>%
+  mutate(mouse.no=ifelse(is.na(mouse.no),0,mouse.no),
+         cond=str_trim(cond))
+
+wtdf$day = as.factor(wtdf$day)
+wtdf$cond = as.factor(wtdf$cond)
+wtdf$correct = as.integer(wtdf$correct)
+wtdf$mouse.no = as.integer(wtdf$mouse.no)
+
+```
+
+```{r}
+wtdf %>%
+  group_by(day,cond) %>%
+  summarise(mcorrect=mean(correct), semcorrect=sem(correct)) %>%
+  ggplot(aes(x=day, y=mcorrect, group=cond)) +
+  geom_line(aes(colour=cond, group=cond)) +
+  geom_point(aes(colour=cond, group=cond)) +
+  #geom_errorbar(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect), width=0.2) +
+  geom_ribbon(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect, fill=cond), alpha=0.1) +
+  geom_hline(yintercept = 50, linetype='dashed') +
+  gtheme +
+  theme(legend.position='none') +
+  labs(colour='', fill='') +
+  xlab('Day') + ylab('Correct (%)')
+ggsave(paste0(img_dir, 'wt_learning_curve.svg'), width=8, height=7.5, units='cm')
+  
+```
+
+```{r}
+wtdf.learnt = wtdf %>% 
+  group_by(cond, mouse.no) %>%
+  arrange(day) %>%
+  summarise(learnt.day=which.day.learnt(correct, 80))
+```
+
+```{r}
+wtdf.learnt %>%
+  #ggplot(aes(x=cond, y=learnt.day)) +
+  #geom_boxplot(aes(colour=cond), outlier.size=0) +
+  ggpubr::ggboxplot(x='cond', y='learnt.day', color = 'cond' ) +
+  geom_dotplot(aes(fill=cond), binaxis="y", stackdir="center", 
+               binwidth=0.2, dotsize=1, stackratio=0.8, alpha=0.7) +
+  stat_compare_means(aes(label = paste0('p=', ..p.format..)),
+                     method='wilcox.test',
+                     comparisons=list(c(1,2))) +
+  gtheme +
+  theme(axis.text.x=element_text(angle = 30, hjust = 1)) +
+  xlab('') + ylab('Days until learned (≥ 80 %)') +
+  ylim(c(1,7))+
+  theme(legend.position = 'none') 
+
+ggsave(paste0(img_dir, 'wtlearnt_boxplot.svg'), width=6, height=8, units='cm')
+
+```
+

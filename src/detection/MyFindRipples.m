@@ -57,6 +57,7 @@ minInterRippleInterval = 30; % in ms
 minRippleDuration = 20; % in ms
 maxRippleDuration = 100; % in ms
 lowThresholdMV = 0.02;
+stdEstimate = 0; % 0 marks that stdEstimate needs to be calculated
 
 % Check number of parameters
 if nargin < 1 | mod(length(varargin),2) ~= 0
@@ -69,6 +70,8 @@ for i = 1:2:length(varargin)
 		error(['Parameter ' num2str(i+2) ' is not a property (type ''help <a href="matlab:help FindRipples">FindRipples</a>'' for details).']);
 	end
 	switch(lower(varargin{i}))
+        case 'std'
+            stdEstimate = varargin{i+1};
 		case 'thresholds'
 			thresholds = varargin{i+1};
 % 			if ~isdvector(thresholds,'#2','>0'),
@@ -109,13 +112,14 @@ end
 
 % Parameters
 windowLength = round(frequency/11);
+windowLength = round(frequency/23);
 % make window of odd length
 windowLength = floor(windowLength / 2) * 2 + 1; 
 
 squaredSignal = signal.^2;
 window = ones(windowLength,1)/windowLength;
 
-[normalizedSquaredSignal,sd] = unity(Filter0(window, squaredSignal));
+[normalizedSquaredSignal,sd] = unity2(Filter0(window, squaredSignal), stdEstimate);
 
 % Detect ripple periods by thresholding normalized squared signal
 thresholded = normalizedSquaredSignal > lowThresholdFactor;
@@ -138,8 +142,6 @@ firstPass = [start,stop];
 if isempty(firstPass)
 	disp('No ripples detected');
     ripples = [];
-    bad = [];
-    sd = [];
 	return
 else
 	%disp(['After detection by thresholding: ' num2str(length(firstPass)) ' events.']);
@@ -162,8 +164,6 @@ secondPass = [secondPass ; ripple];
 if isempty(secondPass)
 	disp('Ripple merge failed');
     ripples = [];
-    bad = [];
-    sd = [];
 	return
 else
 	%disp(['After ripple merge: ' num2str(length(secondPass)) ' events.']);
@@ -183,8 +183,6 @@ end
 if isempty(thirdPass)
 	%disp('Peak thresholding failed.');
     ripples = [];
-    bad = [];
-    sd = [];
 	return
 else
 	%disp(['After peak thresholding: ' num2str(length(thirdPass)) ' events.']);
@@ -207,8 +205,8 @@ ripples(duration > maxRippleDuration/1000,:) = [];
 
 %% Calculate peak frequency of the ripple
 for i = 1:size(ripples,1)
-    start_i = int32(ripples(i,1) * frequency);
-    end_i = int32(ripples(i,3) * frequency);
+    start_i = int32((ripples(i,1) - time(1)) * frequency);
+    end_i = int32((ripples(i,3) - time(1)) * frequency);
     x = signal(start_i:end_i);
 
     [pxx, freqs] = pmtm(x, 3, length(x), frequency);
@@ -260,6 +258,18 @@ function [U,stdA] = unity(A)
 	meanA = mean(A);
 	stdA = std(A);
     U = (A - meanA)/stdA;
+end
+
+function [stdEstimate] = getStdEstimate(A)
+    %stdEstimate = median(A) / 0.6745;
+    stdEstimate = std(A);
+end
+
+function [U, stdEstimate] = unity2(A, stdEstimate)
+    if stdEstimate == 0
+        stdEstimate = getStdEstimate(A);
+    end
+    U = (A - mean(A)) / stdEstimate;
 end
 
 

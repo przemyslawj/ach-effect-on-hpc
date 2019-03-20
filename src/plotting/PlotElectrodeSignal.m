@@ -1,4 +1,4 @@
-path = '/mnt/DATA/Clara/baseline/2018-09-05/signal';
+path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
@@ -11,9 +11,12 @@ lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
 nChans = meta.nChans;
 
 animal_code = binName(1:2);
-electrodes_file = '/mnt/DATA/Clara/ymaze/valid_electrodes.csv';
-electrodes = readtable(electrodes_file);
-channelList = electrodes(strcmp(electrodes.animal, animal_code),:).channel;
+channelList = findSelectedChannels(...
+    '/mnt/DATA/Clara/ymaze/selected_electrodes.csv',...
+    animal_code);
+if isempty(channelList)
+    channelList = 1:nChans;
+end
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 

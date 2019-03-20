@@ -64,9 +64,9 @@ interval_indecies = [
     interval_indecies;
     [(after_reward_sample + round(10 * fs)), (after_reward_sample + round(20 * fs))];  % AfterConsumerdReward_10_sec
     [key_positions_sample(1) key_positions_sample(end - 1)];  % BeforeGoalZone
-    [key_positions_sample(end-1) after_reward_sample]; % DuringStim
+    [key_positions_sample(end-1) recording_end_sample]; % DuringStim
     [key_positions_sample(1) key_positions_sample(end)];  % DuringMaze
-    [max(recording_end_sample - 10 * fs, key_positions_sample(end)) recording_end_sample];  % HomeCageLast10sec
+    [max(recording_end_sample - 10 * fs, key_positions_sample(end-1)) recording_end_sample];  % StimLast10sec
     [key_positions_sample(1) recording_end_sample]  % Total
 ];
 interval_distances = [
@@ -97,10 +97,13 @@ dom_freq = zeros(nChans, numel(key_position_names));
 theta_dom_freq = zeros(nChans, numel(key_position_names));
 ripples_freq = zeros(nChans, numel(key_position_names));
 velocity = zeros(nChans, numel(key_position_names));
+durations = zeros(nChans, numel(key_position_names));
 
 exp_bands = exp(0.7:0.05:5.3);
 all_bands = [2:1:15 exp_bands(43:end)];
 all_psd_xx = zeros((numel(all_bands) - 1), numel(key_position_names));
+all_ripples = [];
+
 
 for ch_i = 1:nChans
     
@@ -115,8 +118,23 @@ for ch_i = 1:nChans
     times = (1:size(filtered,2)) / fs;
     [ripples, ~, ~] = MyFindRipples(times', filtered', ...
                                  'frequency', fs, ...
-                                 'thresholds', [2 3 0.01],...
+                                 'thresholds', [2 4 0.01],...
                                  'durations', [10 40 350]);
+    nripples = size(ripples, 1);
+    if nripples > 0
+        translated_ripples = ripples;
+%         translated_ripples(:,1) = translated_ripples(:,1) - time_mouse_arrived.sec(end - 1);
+%         translated_ripples(:,2) = translated_ripples(:,2) - time_mouse_arrived.sec(end - 1);
+%         translated_ripples(:,3) = translated_ripples(:,3) - time_mouse_arrived.sec(end - 1);
+        rec_dur_sec = times(end);
+        translated_ripples(:,1) = translated_ripples(:,1) - rec_dur_sec;
+        translated_ripples(:,2) = translated_ripples(:,2) - rec_dur_sec;
+        translated_ripples(:,3) = translated_ripples(:,3) - rec_dur_sec;
+        ripples_table = array2table(translated_ripples);
+        ripples_table.Properties.VariableNames = {'start_sec', 'peak_t', 'end_time', 'peakpow', 'peak_freq'};
+
+        all_ripples = [all_ripples; ripples_table];
+    end
     
     for i = 1:size(interval_indecies, 1)
         left_i = ceil(interval_indecies(i,1));
@@ -146,6 +164,7 @@ for ch_i = 1:nChans
             dom_freq(ch_i, i) = NaN;
             theta_dom_freq(ch_i, i) = NaN;
             velocity(ch_i, i) = NaN;
+            durations(ch_i, i) = 0;
             for j=1:(numel(all_bands)-1)
                 all_psd_xx(j, i) = all_psd_xx(j, i-1);
             end
@@ -173,8 +192,8 @@ for ch_i = 1:nChans
             [~, maxValIndex] = max(pxx);
             dom_freq(ch_i, i) = freqs(maxValIndex);
             theta_dom_freq(ch_i, i) = DomFreqInBand(freqs, pxx, theta);
-
             velocity(ch_i, i) = interval_distances(i) / section_sec;
+            durations(ch_i, i) = section_sec;
             pow_slow(ch_i, i) = TotalBandPower(freqs, pxx, slow);
             pow_theta(ch_i, i) = TotalBandPower(freqs, pxx, theta);
             pow_above_theta(ch_i, i) = TotalBandPower(freqs, pxx, above_theta);
@@ -223,6 +242,9 @@ ripples_freq.Properties.VariableNames = strcat('pow_ripples_freq_', key_position
 velocity = array2table(velocity);
 velocity.Properties.VariableNames = strcat('velocity_', key_position_names);
 
+durations = array2table(durations);
+durations.Properties.VariableNames = strcat('duration_', key_position_names);
+
 %% Replace 0's at Start Zone with power from subsequent stage
 for j = (numel(key_position_names) - 1) : -1 : 1
     for i = 1:size(all_psd_xx,1)
@@ -233,10 +255,11 @@ for j = (numel(key_position_names) - 1) : -1 : 1
 end
 
 %%
-output.pow = [pow_slow pow_theta pow_above_theta pow_slow_gamma pow_med_gamma pow_fast_gamma dom_freq theta_dom_freq ripples_freq velocity];
+output.pow = [pow_slow pow_theta pow_above_theta pow_slow_gamma pow_med_gamma pow_fast_gamma dom_freq theta_dom_freq ripples_freq velocity durations];
 output.all_psd_xx = all_psd_xx ./ repmat(all_psd_xx(:,1), 1, numel(key_position_names));
 output.psd_all_bands = all_bands;
 output.channel = channel_names;
+output.ripples = all_ripples;
 %output.ntrials = ntrials;
 
 %% Show spectrogram

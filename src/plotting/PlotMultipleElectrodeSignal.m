@@ -3,9 +3,9 @@ path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
 fprintf('Processing file: %s\n', binName);
 
 animal_code = binName(1:2);
-electrodes_file = '/mnt/DATA/Clara/ymaze/valid_electrodes.csv';
-electrodes = readtable(electrodes_file);
-channelList = electrodes(strcmp(electrodes.animal, animal_code),:).channel;
+channelList = findSelectedChannels(...
+    '/mnt/DATA/Clara/ymaze/selected_electrodes.csv',...
+    animal_code);
 
 secondOffset = 0;
 meta = ReadMeta(binName, path);

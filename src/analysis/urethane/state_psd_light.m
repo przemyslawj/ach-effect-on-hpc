@@ -1,6 +1,6 @@
 %% setup results
 rootdir = '/mnt/DATA/Clara/urethane/';
-experiment = 'scopolamine';
+experiment = 'light';
 datarootdir = [ rootdir experiment filesep ];
 
 txtfiles = dir([datarootdir filesep '*.txt']);
@@ -49,8 +49,11 @@ for i = 1:nexp
     lengthSeconds = size(dataArray, 2) / fs;
 
     rec_times = [0 15;
-                 15 45;
+                 15 30;
                  45 60; ];    
+%     rec_times = [0 60;
+%                  60 120;
+%                  120 180; ];
 
     time = (1:size(dataArray,2)) / fs;
 
@@ -73,18 +76,14 @@ for i = 1:nexp
     %% calculate PSD
 
     slow = [0.1 2];
-    theta = [2 6];
+    theta = [2 5];
     slow_gamma = [20 40];
     med_gamma = [60 80];
     fast_gamma = [80 150];
     above_theta = [7, 20];
 
     for channel = 1:nchans
-        [ripples, sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(channel,:)', ...
-                     'frequency', fs, ...
-                     'thresholds', [2 4 0.01],...
-                     'durations', [10 40 350]);
-        
+        sd = 0;      
         for rec_times_i = 1:size(rec_times, 1)
             sec_start = rec_times(rec_times_i, 1);
             sec_end = rec_times(rec_times_i, 2);
@@ -123,8 +122,15 @@ for i = 1:nexp
                 result_table.all_psd_xx(entry_i, j) = TotalBandPower(freqs, pxx, [all_bands(j) all_bands(j+1)]);
             end
 
-             
-             section_ripples = ripples(ripples(:,2) >= sec_start & ripples(:,2) <= sec_end,:);
+             filtered_start_i = sec_start * fs + 1;
+             filtered_end_i = min(sec_end * fs + 1, size(filtered,2));
+             [section_ripples, sd, normalizedSquaredSignal] = MyFindRipples(...
+                     (time(filtered_start_i : filtered_end_i))', ...
+                     (filtered(channel, filtered_start_i : filtered_end_i))', ...
+                     'frequency', fs, ...
+                     'thresholds', [2 4.0 0.01], ...
+                     'durations', [10 40 400], ....
+                     'std', sd);
              nripples = size(section_ripples, 1);
              if ~isempty(section_ripples)
                 result_table.has_ripples(entry_i) = 1;

@@ -27,11 +27,27 @@ library(ggpubr)
 select = dplyr::select
 ```
 
+```{r}
+sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
+```
 
 ```{r include=FALSE}
-gtheme = theme_minimal() + theme_cowplot() +
-  theme(text = element_text(size=20), axis.text = element_text(size=16))
 img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/baseline/'
+px2pt = 1/(ggplot2::.pt*72.27/96)
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=8, family = 'Arial'), 
+        panel.background = element_rect(fill = 'white'),
+        line = element_line(size = px2pt),
+        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.text.x=element_text(size=8, colour = "black"),
+        axis.text.y=element_text(size=8, colour = "black"),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8))
+
+col_width = 8.5 
+immobile.col = '#3b4ba7ff'
+mobile.col = '#f8766dff'
 ```
 
 In the baseline recordings, change visible on laser activation for low frequency oscillations.
@@ -66,12 +82,19 @@ psddf$trial_id = as.factor(psddf$trial_id)
 ripple.df = read_csv(paste0(data_dir,'/','ripples_th4.csv')) %>%
 #ripple.df = read_csv(paste0(data_dir,'/','ripples.csv')) %>%
   mutate(trial_id=paste(date, animal, trial ,sep='_')) %>%
-  #filter(state == 'sleep')
+  #filter(state == 'Immobile')
   filter(state != 'xx')
 ripple.df$animal = as.factor(ripple.df$animal)
 ripple.df$channel = as.factor(ripple.df$channel)
 ripple.df$laserOn = as.factor(ripple.df$laserOn)
 ```
+
+```{r}
+states.new = list(Immobile='sleep',Mobile="awake")
+levels(ripple.df$state) = states.new
+levels(psddf$state) = states.new
+```
+
 
 ```{r}
 electrodes.selected$channel = as.factor(electrodes.selected$channel)
@@ -153,33 +176,191 @@ for (animal_name in levels(best.psddf$animal)) {
   }
 }
 
-
+axis.breaks=c(1:9,seq(10,100,10))
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
 animals.bands.df.filtered = filter(animals.bands.df, animal %in% c('K4', 'K2', 'K1', 'K3', 'L1'))
 gbands = ggplot(animals.bands.df.filtered) +
   geom_line(aes(x=band, y=mchange, colour=animal), size=1) +
   geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=animal), alpha=0.1)+
   geom_hline(yintercept=1) +
-  scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
+  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
   facet_grid(. ~ state) +
   xlab('Frequency (Hz)') +
   ylab('LFP power change during stim (%)')
 
 gbands
 ggsave(file=paste0(img_dir, '/', '2_baseline_psd_change.svg'), gbands, width=9, height=4)
-gbands + xlim(6,40)
 ```
+```{r include=TRUE}
+
+mean.wona = function(X) {
+  mean(X, na.rm=TRUE)
+}
+
+sd.wona = function(X) {
+  sd(X, na.rm=TRUE)
+}
+
+animals.bands.df = data.frame()
+for (state_name in levels(best.psddf$state)) {
+  animal.df = filter(best.psddf, state == state_name) 
+  animal.df$trial_id_num = as.integer(animal.df$trial_id)
+  animal.psd.cols = animal.df %>% 
+    select(trial_id_num, starts_with('all_psd_xx')) 
+  dm = as.matrix(animal.psd.cols)
+  nbands = dim(dm)[2]
+  nrows = dim(dm)[1]
+  dm.diff = matrix(rep(0, nbands * nrows/3), ncol=nbands)
+  if (nrows > 0) {
+    for (i in 1:(nrows/3)) {
+      denom = dm[3*i-2,]
+      nom = dm[3*i-1,]
+      for (j in 1:length(denom)) {
+        if (denom[j] == 0) {
+          denom[j] = dm[3*i-1,j]
+        }
+        if (nom[j] == 0) {
+          nom[j] = NA
+        }
+      }
+      dm.diff[i,] = nom / denom
+    }
+  }
+  #last_row = which(dm.diff[,1] != 1)[1] - 1
+  means = apply(dm.diff[,2:nbands], 2,FUN=mean.wona)
+  sds = apply(dm.diff[,2:nbands], 2,FUN=sem)
+  
+  bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
+  bands.df = data.frame(band=bands[1:(nbands-2)],
+                        mchange=means[1:(nbands-2)],
+                        sdchange=sds[1:(nbands-2)],
+                        state=rep(state_name,nbands-2))
+  
+  animals.bands.df = rbind(animals.bands.df, bands.df)
+}
+
+axis.breaks=c(1:9,seq(10,100,10))
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+gbands = ggplot(animals.bands.df) +
+  geom_line(aes(x=band, y=mchange, colour=state), size=1) +
+  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=state, fill=state), alpha=0.1)+
+  geom_hline(yintercept=1, linetype='dashed') +
+  #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
+  gtheme +
+  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  scale_color_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), values=c(mobile.col, immobile.col, 'black')) +
+  scale_fill_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), values=c(mobile.col, immobile.col, 'black')) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power ratio') +
+  labs(colour = "", fill='') +
+  theme(legend.position = 'top')  
+
+gbands
+ggplot2::ggsave(file=paste0(img_dir, '/', '3_psd_change_mobile_vs_immobile.svg'), gbands, width=11, height=8, units='cm')
+```
+
+```{r}
+library(reshape2) 
+animals.bands.df = data.frame()
+
+
+sampled.trials = group_by(best.psddf, state, animal) %>%
+  select(trial_id) %>%
+  sample_n(6) %>%
+  ungroup()
+
+samples.df = filter(best.psddf, trial_id %in% sampled.trials$trial_id)
+
+for (state_name in levels(best.psddf$state)) {
+  animal.df = filter(samples.df, state == state_name) 
+  animal.df$trial_id_num = as.integer(animal.df$trial_id)
+  animal.psd.cols = animal.df %>% 
+    select(trial_id_num, starts_with('all_psd_xx')) 
+  dm = as.matrix(animal.psd.cols)
+  nbands = dim(dm)[2]
+  nrows = dim(dm)[1]
+  dm.diff = matrix(rep(0, nbands * nrows/3), ncol=nbands)
+  trial_ids = rep('', nrows/3)
+  animal_ids = rep('', nrows/3)
+  if (nrows > 0) {
+    for (i in 1:(nrows/3)) {
+      denom = dm[3*i-2,]
+      nom = dm[3*i-1,]
+      for (j in 1:length(denom)) {
+        if (denom[j] == 0) {
+          denom[j] = dm[3*i-1,j]
+        }
+        if (nom[j] == 0) {
+          nom[j] = NA
+        }
+      }
+      dm.diff[i,] = nom / denom
+      trial_ids[i] = unname(animal.df[[3*i-1,'trial_id']])
+      animal_ids[i] = unname(animal.df[[3*i-1,'animal']])
+    }
+  }
+  
+  bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
+  A = as.data.frame(dm.diff[,2:nbands])
+  names(A) = bands[1:(nbands-2)]
+  A$trial_id = trial_ids
+  A$animal_id = animal_ids
+  A.melt = melt(A, id = c('trial_id', 'animal_id'))
+  A.melt$state = rep(state_name, dim(A.melt)[1])
+    
+  animals.bands.df = rbind(animals.bands.df, A.melt)
+}
+
+animals.bands.df$trial_id = as.factor(animals.bands.df$trial_id )
+animals.bands.df$animal_id = as.factor(animals.bands.df$animal_id )
+animals.bands.df$state = as.factor(animals.bands.df$state )
+animals.bands.df$variable = bands[animals.bands.df$variable]
+
+axis.breaks=c(1:9,seq(10,100,10))
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+gbands = ggplot(animals.bands.df, aes(x=variable, y=value, colour=state, group=trial_id)) +
+  geom_line(size=0.5 * px2pt) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
+  gtheme +
+  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_color_manual(labels=c('', ''), values=c(immobile.col, mobile.col)) +
+  scale_fill_manual(labels=c('', ''), values=c(immobile.col, mobile.col)) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power ratio') +
+  facet_grid(. ~ state) +
+  labs(colour = "", fill='') +
+  theme(legend.position = 'none')  
+
+gbands
+ggsave(file=paste0(img_dir, '/', '3_baseline_theta_change_all.pdf'), 
+       width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
+```
+
+
 Increase in ~50Hz for K2 and others in sleep. Try to see if artifact or not by adding 50Hz noise and seeing how differs?
 
 ```{r}
 psddf.on = best.psddf %>%
   group_by(trial_id) %>%
   filter(laserOn==1) %>%
-  top_n(1) %>%
+  slice(1) %>%
   mutate(desc='2_stim')
+trial.ids = unique(psddf.on$trial_id)
 
 psddf.off = best.psddf %>%
   group_by(trial_id) %>%
-  filter(laserOn==0) %>%
+  filter(laserOn == 0) %>%
+  filter(trial_id %in% trial.ids) %>%
   slice(1)  %>%
   mutate(desc='1_before')
 
@@ -189,8 +370,12 @@ paired.psddf.on = left_join(psddf.off, psddf.on, by='trial_id', suffix=c('.fst',
 psddf.off2 = best.psddf %>%
   group_by(trial_id) %>%
   filter(laserOn==0) %>%
+  filter(trial_id %in% trial.ids) %>%
   dplyr::slice(2) %>%
   mutate(desc='3_after')
+
+trial.ids.off = unique(psddf.off$trial_id)
+psddf.on = filter(psddf.on, trial_id %in% trial.ids.off)
 
 psddf.all = bind_rows(psddf.on, psddf.off, psddf.off2)
 psddf.all$animal = droplevels(psddf.all$animal)
@@ -214,7 +399,7 @@ my.paired.plot = function(paired.psddf.all, varname) {
     geom_boxplot(aes(x=paired_group_num, group=paired_group_num, fill=desc), notch=FALSE) +
     #geom_point(size=1) +
     geom_jitter(size=1, width=0.1, height=0) +
-    geom_line(aes(group=trial_id), size=0.3, alpha=0.4) +
+    geom_line(aes(group=trial_id), size=0.3, alpha=0.4, linetype=2) +
     facet_grid(. ~ state) +
     scale_x_continuous(breaks = seq(2,nanimals*3,3), labels = levels(paired.psddf.all$animal)) +
     xlab('Animal')
@@ -309,7 +494,7 @@ paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
   paired.swr = unstack(Y, formula(paste0(var.name, ' ~ ', cond.name )))
   wilcox.test(paired.swr[[1]], paired.swr[[2]], paired=paired, alternative='greater')
 }
-test_val=paired.swr.wilcox(psddf.all, 'swr_incidence', 'desc')
+#test_val=paired.swr.wilcox(psddf.all, 'swr_incidence', 'desc')
 ```
 
 Ripple incidence is significantly lowered by the laser stimulation (paired Wilcoxon test, p-value=`r test_val$p.value`), the effect is more prominent in sleep.
@@ -373,50 +558,94 @@ kruskal.test(ripple_dur~laserOn, data=best.ripple.df)
 
 Histogram of the ripples over time - the laser active at 20-40 sec
 
-```{r}
-bin_dur = 2
-best.ripple.df = best.ripple.df %>%
-  mutate(bin=floor(peak_t / bin_dur))
-
-df = best.ripple.df %>%
-  filter(date=='2018-09-05') %>%
-  filter(animal %in% c('K1', 'K2', 'K3', 'K4')) %>%
-  filter(!is.na(trial_id)) %>%
-  mutate(nripples=1)
-
-max_bin = max(df$bin)
-trials = unique(df$trial_id)
-binned.template = data.frame(trial_id=rep(trials, each=max_bin),
-                             bin=rep(1:max_bin, length(trials)),
-                             nripples=rep(0, length(trials)))
-binned.ripple.df = df %>%
-  right_join(binned.template, by=c('trial_id', 'bin')) %>%
-  mutate(trial_id2=trial_id) %>%
-  separate(trial_id2, c('date', 'animal', 'trial'), sep='_')
-binned.ripple.df$animal = as.factor(binned.ripple.df$animal)
-binned.ripple.df$date = as.factor(binned.ripple.df$date)
-binned.ripple.df$trial = as.integer(binned.ripple.df$trial)
-
-binned.ripple.df = binned.ripple.df %>%
-  group_by(trial_id, animal, date, trial, bin) %>%
-  summarise(nripples.total = sum(nripples.x, na.rm=TRUE) + sum(nripples.y, na.rm=TRUE),
-            incidence = nripples.total / bin_dur)
-binned.ripple.df$bin = as.factor(binned.ripple.df$bin * bin_dur)
-```
 
 TODO: This could be per mouse and shown as distribution of ripples.
+```{r include=TRUE}
+source('../bin_ripples.R')
+
+state_name = 'awake'
+binned.ripple.df = best.ripple.df %>% 
+  #filter(date=='2018-09-05') %>%
+  filter(animal %in% c('K1', 'K2', 'K3', 'K4', 'L1')) %>%
+  filter(state == state_name) %>%
+  filter(!is.na(trial_id)) %>%
+  bin.ripples(bin_dur=5)
+
+incidence.summary = binned.ripple.df %>%
+  mutate(laserOn = (bin_sec > 15 & bin_sec <= 45)) %>%
+  group_by(bin_sec, laserOn) %>%
+  summarise(mincidence = mean(incidence, na.rm = TRUE),
+            incidence.sd = sem(incidence))
+
+
+g = ggplot(incidence.summary, aes(x=bin_sec, y=mincidence)) +
+  geom_col(fill='gray', colour='black', position=position_dodge(width=-2.5)) +
+  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd), width=1.2) +
+  ylab('Ripple\nincidence (Hz)') +
+  xlab('Time (sec)') +
+  #scale_fill_manual(values = c("grey", "#56B4E9")) +
+  scale_x_continuous(breaks=seq(15,50,15), minor_breaks=seq(5,55,5))  +
+  ylim(c(0,0.3)) +
+  gtheme +
+  theme(legend.position = 'none') 
+
+g
+ggsave(file=paste0(img_dir, '/', '3_ripple_incidence', state_name, '.svg'), width=12, height=4, units='cm')
+
+```
+```{r}
+paired.state = paired.psddf.all %>%
+  filter(desc %in% c('1_before', '2_stim')) %>%
+  filter(trial_id %in% trial.ids) %>%
+  mutate(state_laser=interaction(state, laserOn, lex.order=TRUE))
+paired.state$state_laser_num=as.integer(paired.state$state_laser)
+paired.state$state_laser = as.factor(paired.state$state_laser)
+```
 
 ```{r include=TRUE}
-incidence.summary = binned.ripple.df %>%
-  group_by(bin) %>%
-  summarise(mincidence = mean(incidence, na.rm = TRUE),
-            incidence.sd = sd(incidence, na.rm = TRUE))
+xlabels = rep(c('0 - 15 sec', '15 - 30 sec'), 2)
+my_comparisons <- list( c("0", "1"))
+paired.state %>%
+  ggplot(aes(x=laserOn, y=swr_incidence, group=laserOn)) +
+  #stat_summary(aes(colour=laserOn), fun.y='mean', geom='col', fill='white') +
+  #stat_summary(fun.data='mean_sd', geom='errorbar', width=0.3) +
+  #geom_boxplot(aes(group=state_laser_num, colour=state), notch=FALSE) +
+  geom_violin(aes(group=state_laser_num, colour=state), adjust=2,
+              draw_quantiles = c(0.5)) +
+  #geom_dotplot(aes(fill=state), binaxis = "y", stackdir = "center", 
+  #             binwidth = 0.01, dotsize=0.8, stackratio=0.8) +
+  #geom_line(aes(group=trial_id), size=0.3, alpha=0.4, linetype=1) +
+  scale_x_discrete(labels = xlabels) +
+  scale_colour_manual(values = c(immobile.col, mobile.col)) +
+  scale_fill_manual(values = c(immobile.col, mobile.col)) +
+  facet_grid(. ~ state) +
+  ylab('Ripple incidence (Hz)') + 
+  xlab('') +
+  ylim(c(0, 0.6)) +
+  stat_compare_means(aes(label = paste0(..p.format..)), 
+                     method='wilcox.test', paired = TRUE, 
+                     label.y = 0.58, label.x = 1.5, comparisons = my_comparisons) +
+  labs(colour='') +
+  gtheme + 
+  theme(legend.position = 'none',
+        axis.text.x=element_text(angle = 30, hjust = 1)) +
+ggplot2::ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_comparison.svg'), width=11, height=8.5, units='cm', dpi=300)
+```
 
 
-ggplot(incidence.summary, aes(x=bin, y=mincidence)) +
-  geom_col(aes(x=bin, y=mincidence), fill='blue') +
-  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd)) +
-  ylab('Ripple incidence (Hz)') +
-  xlab('Time (sec)')
+```{r}
+wilcox.test(swr_incidence ~ laserOn, data=paired.state, paired=TRUE, subset=state=='Immobile')
+wilcox.test(swr_incidence ~ laserOn, data=paired.state, paired=TRUE, subset=state=='Mobile')
+```
+```{r}
+ggpaired(paired.state, x='laserOn', y='swr_incidence', facet.by='state', color='laserOn', 
+         line.color = 'grey', line.size = 0.2, add='jitter') +
+  stat_compare_means(aes(label = paste0("p=", ..p.format..)), 
+                     method='wilcox.test', paired = TRUE, 
+                     label.y = 0.57, label.x = 1.5, comparisons = my_comparisons) +
+  scale_colour_manual(values = c("black", laser.col)) +
+  xlab('') + ylab('Ripple incidence (Hz)') +
+  labs(colour='') +
+  gtheme + theme(legend.position = 'top')
 ```
 
