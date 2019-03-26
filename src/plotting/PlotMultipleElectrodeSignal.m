@@ -1,4 +1,5 @@
 path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
+path = '/mnt/DATA/Prez/N&A_rest/2018-03-06/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
@@ -25,5 +26,22 @@ channel_std = std(dataArray, [], 2);
 if isempty(channelList)
   channelList = (1:nChans)';
 end
+
 showTraces(dataArray, fs, binName, channelList);
+% 
+% % shank 1L
+% channelList = [6 5 9 12 7 2 0 1 15] + 1;
+% showTraces(dataArray, fs, binName, channelList');
+% 
+% % shank 1R
+% channelList = [10 11 4 3 13 14 8 15] + 1;
+% showTraces(dataArray, fs, binName, channelList');
+% 
+% % shank 2L
+% channelList = [25 26 22 19 24 29 31 30 16] + 1;
+% showTraces(dataArray, fs, binName, channelList');
+% 
+% % shank 2R
+% channelList = [21 20 27 28 18 17 23 16] + 1;
+% showTraces(dataArray, fs, binName, channelList');
 

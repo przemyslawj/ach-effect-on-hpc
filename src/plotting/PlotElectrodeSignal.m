@@ -1,4 +1,5 @@
 path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
+path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
@@ -21,7 +22,7 @@ end
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 
 fs = meta.nSamp;
-dataArray = filter50Hz(dataArray, fs);
+%dataArray = filter50Hz(dataArray, fs);
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 
 
@@ -83,7 +84,7 @@ for i = 1:numel(channelList)
     time=(1:size(filtered,2))/fs;
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...
                                  'frequency', fs, ...
-                                 'thresholds', [2 3 0.01],...
+                                 'thresholds', [2 4 0.01],...
                                  'durations', [10 40 350]);
     spikeTimes = find(spikes_i(chan,:) > 0) / fs;
     if ~isempty(ripples)                               

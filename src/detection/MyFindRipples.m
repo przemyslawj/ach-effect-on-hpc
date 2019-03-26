@@ -200,6 +200,7 @@ ripples = [time(thirdPass(:,1)) time(peakPosition) time(thirdPass(:,2)) ...
     peakNormalizedPower zeros(size(peakNormalizedPower))];
 duration = ripples(:,3)-ripples(:,1);
 ripples(duration < minRippleDuration/1000,:) = [];
+duration = ripples(:,3)-ripples(:,1);
 ripples(duration > maxRippleDuration/1000,:) = [];
 %disp(['After min and max duration test: ' num2str(size(ripples,1)) ' events.']);
 
