@@ -3,7 +3,7 @@ path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-subplots = 1;
+subplots = 0;
 
 meta = ReadMeta(binName, path);
 
@@ -39,7 +39,7 @@ dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 
 %% Filter LFP for ripples
 filtered = zeros(size(dataArray));
-passband = [100 250];
+passband = [80 250];
 nyquist = fs / 2;
 filterOrder = 4;
 filterRipple = 20;
@@ -50,6 +50,12 @@ for chan = 1:nChans
     filtered(chan,:) = filtfilt(b, a, dataArray(chan,:));
 end
 
+lengthSeconds = 1;
+startSec = 28.5;
+timeIndecies = (startSec * fs) : ((startSec + lengthSeconds) * fs);
+timeIndecies = 1:size(dataArray, 2);
+
+
 freqrange = 1:2:50;
 for i = 1:numel(channelList)
     channel = channelList(i);
@@ -57,7 +63,7 @@ for i = 1:numel(channelList)
     % Raw signal
     subplot(4,1,1);
     timepoints = (1:size(dataArray,2)) / fs;
-    plot(timepoints, dataArray(channel,:));
+    plot(timepoints(timeIndecies), dataArray(channel,timeIndecies));
     xstd = std(dataArray(channel,:));
     
     subplot(4,1,2);
@@ -72,7 +78,7 @@ for i = 1:numel(channelList)
         ripple_starts = ripples(:,1);
         ripple_ends = ripples(:,3);
     end
-    plotSWR(timepoints, filtered(channel,:), fs, ripple_starts, ripple_ends);
+    plotSWR(timepoints(timeIndecies), filtered(channel,timeIndecies), fs, ripple_starts, ripple_ends);
     
     % Spectrogram signal
     [wt, wfreqs]=cwt(dataArray(channel,:), 'morse', fs, 'ExtendSignal', true, ...
@@ -85,12 +91,12 @@ for i = 1:numel(channelList)
         figure;
     end
     subplot(4,1,3);
-    draw_cwt(wt_pow(high_freqs,:), timepoints, wfreqs(high_freqs));
-    draw_keypoints(time_mouse_arrived, [min(wfreqs(high_freqs)), max(wfreqs(high_freqs))], lengthSeconds, secondOffset);
+    draw_cwt(wt_pow(high_freqs,timeIndecies), timepoints(timeIndecies), wfreqs(high_freqs));
+    %draw_keypoints(time_mouse_arrived, [min(wfreqs(high_freqs)), max(wfreqs(high_freqs))], lengthSeconds, secondOffset);
     
     subplot(4,1,4);
-    draw_cwt(wt_pow(low_freqs,:), timepoints, wfreqs(low_freqs));
-    draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds, secondOffset);
+    draw_cwt(wt_pow(low_freqs,timeIndecies), timepoints(timeIndecies), wfreqs(low_freqs));
+    %draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds, secondOffset);
     ax = gca;
     ax.XAxis.Visible = 'on';
     xlabel('Time (sec)');  

@@ -23,7 +23,9 @@ result_table.all_psd_xx = zeros(nexp * 3 * nchans, numel(all_bands));
 
 result_table.pow_slow = zeros(nexp * 3 * nchans, 1);
 result_table.pow_theta = zeros(nexp * 3 * nchans, 1);
+result_table.peak_theta = zeros(nexp * 3 * nchans, 1);
 result_table.pow_slow_gamma = zeros(nexp * 3  * nchans, 1);
+result_table.peak_slow_gamma = zeros(nexp * 3  * nchans, 1);
 result_table.pow_med_gamma = zeros(nexp * 3 * nchans, 1);
 result_table.pow_fast_gamma = zeros(nexp * 3 * nchans, 1);
 result_table.pow_above_theta = zeros(nexp * 3 * nchans, 1);
@@ -94,19 +96,19 @@ for i = 1:nexp
 
     %% calculate PSD
 
-    slow = [3 8];
-    theta = [8 12.5];
-    slow_gamma = [25 35];
+    slow = [3 7];
+    theta = [7 12];
+    above_theta = [12 25];
+    slow_gamma = [25 45];
     med_gamma = [60 80];
     fast_gamma = [80 150];
-    above_theta = [13, 20];
 
     for channel = 1:nchans
         
         [ripples, sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(channel,:)', ...
                      'frequency', fs, ...
-                     'thresholds', [2 4 0.01],...
-                     'durations', [10 40 400]);
+                     'thresholds', [2 5 0.01],...
+                     'durations', [10 30 350]);
         
         for rec_times_i = 1:size(rec_times, 1)
             sec_start = rec_times(rec_times_i, 1);
@@ -139,12 +141,13 @@ for i = 1:nexp
             freqs = fliplr(freqs')';
             pxx = fliplr(pxx')';
 
-            [maxVal, maxValIndex] = max(pxx);
-            result_table.dom_freq(entry_i) = freqs(maxValIndex);
+            result_table.dom_freq(entry_i) = PeakFreq(freqs, pxx, [slow(1), 45]);
 
             result_table.pow_slow(entry_i) = TotalBandPower(freqs, pxx, slow);
             result_table.pow_theta(entry_i) = TotalBandPower(freqs, pxx, theta);
+            result_table.peak_theta(entry_i) = PeakFreq(freqs, pxx, theta);
             result_table.pow_slow_gamma(entry_i) = TotalBandPower(freqs, pxx, slow_gamma);
+            result_table.peak_slow_gamma(entry_i) = PeakFreq(freqs, pxx, slow_gamma);
             result_table.pow_med_gamma(entry_i) = TotalBandPower(freqs, pxx, med_gamma);
             result_table.pow_fast_gamma(entry_i) = TotalBandPower(freqs, pxx, fast_gamma);
             result_table.pow_above_theta(entry_i) = TotalBandPower(freqs, pxx, above_theta);
@@ -193,4 +196,11 @@ function [ pow ] = TotalBandPower2(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
     band_freqs = find(f1 >= band(1) & f1 <= band(2));
     pow = -trapz(f1(band_freqs), log10(pxx(band_freqs))) / (band(2) - band(1));
+end
+
+function [ freq ] = PeakFreq(f1, pxx, band)
+    band_freqs_index = find(f1 >= band(1) & f1 <= band(2));
+    [~, maxValIndex] = max(pxx(band_freqs_index));
+    freqs = f1(band_freqs_index);
+    freq = freqs(maxValIndex);
 end

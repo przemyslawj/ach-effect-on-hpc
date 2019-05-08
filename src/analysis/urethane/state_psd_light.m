@@ -1,6 +1,6 @@
 %% setup results
 rootdir = '/mnt/DATA/Clara/urethane/';
-experiment = 'light';
+experiment = 'inhibition';
 datarootdir = [ rootdir experiment filesep ];
 
 txtfiles = dir([datarootdir filesep '*.txt']);
@@ -14,6 +14,8 @@ result_table = table();
 
 all_ripples = table();
 
+result_table.animal = repmat('XXXXXX', nexp * 3 * nchans, 1);
+
 result_table.row = zeros(nexp * 3 * nchans, 1);
 result_table.trial = zeros(nexp * 3 * nchans, 1);
 result_table.laserOn = zeros(nexp * 3 * nchans, 1);
@@ -23,6 +25,8 @@ result_table.all_psd_xx = zeros(nexp * 3 * nchans, numel(all_bands));
 
 result_table.pow_slow = zeros(nexp * 3 * nchans, 1);
 result_table.pow_theta = zeros(nexp * 3 * nchans, 1);
+result_table.peak_theta = zeros(nexp * 3 * nchans, 1);
+
 result_table.pow_slow_gamma = zeros(nexp * 3  * nchans, 1);
 result_table.pow_med_gamma = zeros(nexp * 3 * nchans, 1);
 result_table.pow_fast_gamma = zeros(nexp * 3 * nchans, 1);
@@ -43,6 +47,7 @@ for i = 1:nexp
     channelList = 1;
 
     fname = [datarootdir filesep txtfiles(i).name]
+    animal = txtfiles(i).name(1:6);
     datatable = readtable(fname);
     dataArray = datatable{:,1};
     dataArray = dataArray';
@@ -96,7 +101,7 @@ for i = 1:nexp
             
             result_table.row(entry_i) = entry_i;
             result_table.laserOn(entry_i) = mod(rec_times_i - 1, 2);
-            
+            result_table.animal(entry_i,:) = animal;
             result_table.trial(entry_i) = i;
             result_table.laserOn(entry_i) = mod(rec_times_i - 1, 2);
 
@@ -114,6 +119,7 @@ for i = 1:nexp
 
             result_table.pow_slow(entry_i) = TotalBandPower(freqs, pxx, slow);
             result_table.pow_theta(entry_i) = TotalBandPower(freqs, pxx, theta);
+            result_table.peak_theta(entry_i) = PeakFreq(freqs, pxx, theta);
             result_table.pow_slow_gamma(entry_i) = TotalBandPower(freqs, pxx, slow_gamma);
             result_table.pow_med_gamma(entry_i) = TotalBandPower(freqs, pxx, med_gamma);
             result_table.pow_fast_gamma(entry_i) = TotalBandPower(freqs, pxx, fast_gamma);
@@ -129,7 +135,7 @@ for i = 1:nexp
                      (filtered(channel, filtered_start_i : filtered_end_i))', ...
                      'frequency', fs, ...
                      'thresholds', [2 4.0 0.01], ...
-                     'durations', [10 40 400], ....
+                     'durations', [10 30 400], ....
                      'std', sd);
              nripples = size(section_ripples, 1);
              if ~isempty(section_ripples)
@@ -166,4 +172,11 @@ function [ pow ] = TotalBandPower2(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
     band_freqs = find(f1 >= band(1) & f1 <= band(2));
     pow = -trapz(f1(band_freqs), log10(pxx(band_freqs))) / (band(2) - band(1));
+end
+
+function [ freq ] = PeakFreq(f1, pxx, band)
+    band_freqs_index = find(f1 >= band(1) & f1 <= band(2));
+    [~, maxValIndex] = max(pxx(band_freqs_index));
+    freqs = f1(band_freqs_index);
+    freq = freqs(maxValIndex);
 end

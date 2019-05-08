@@ -25,6 +25,9 @@ library(tidyr)
 library(cowplot)
 library(ggpubr)
 select = dplyr::select
+
+library(lmerTest)
+
 ```
 
 ```{r}
@@ -112,6 +115,28 @@ best.psddf = mutate(best.psddf,
                     theta_over_supratheta = pow_theta / pow_above_theta)
 ```
 
+# Sample data to include equal no of trials
+```{r}
+group_by(best.psddf, state, animal, laserOn) %>%
+  filter(dom_freq > 0.0) %>%
+  dplyr::summarise(n=n()) %>%
+  filter(laserOn == 1) -> X
+trials_to_sample = group_by(X, state) %>%
+  dplyr::summarise(min.trials = min(n))
+rownames(trials_to_sample) = trials_to_sample$state
+trials_to_sample = list(Immobile=7, Mobile=16)
+animal.trials_ids.df = filter(best.psddf, laserOn==1) %>%
+  filter(dom_freq > 0.0) %>%
+  group_by(animal, state) %>%
+  dplyr::sample_n(trials_to_sample[[unique(state)]]) %>%
+  ungroup() %>%
+  select(trial_id)
+  
+filtered.psddf = best.psddf %>% 
+    filter(trial_id %in% animal.trials_ids.df$trial_id)
+    
+```
+
 
 Effects of the laser on signal spectrum:
 
@@ -136,9 +161,9 @@ sd.wona = function(X) {
 }
 
 animals.bands.df = data.frame()
-for (animal_name in levels(best.psddf$animal)) {
-  for (state_name in levels(best.psddf$state)) {
-    animal.df = filter(best.psddf, animal == animal_name, state == state_name)
+for (animal_name in levels(filtered.psddf$animal)) {
+  for (state_name in levels(filtered.psddf$state)) {
+    animal.df = filter(filtered.psddf, animal == animal_name, state == state_name)
     animal.df$trial_id_num = as.integer(animal.df$trial_id)
     animal.psd.cols = animal.df %>%
       select(trial_id_num, starts_with('all_psd_xx'))
@@ -158,14 +183,14 @@ for (animal_name in levels(best.psddf$animal)) {
             nom[j] = NA
           }
         }
-        dm.diff[i,] = nom / denom * 100 - 100
+        dm.diff[i,] = nom / denom 
       }
     }
     #last_row = which(dm.diff[,1] != 1)[1] - 1
     means = apply(dm.diff[,2:nbands], 2,FUN=mean.wona)
     sds = apply(dm.diff[,2:nbands], 2,FUN=sd.wona)
 
-    bands = exp(seq(0.7, 5.30, by=0.05))
+    bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
     bands.df = data.frame(band=bands[1:(nbands-2)],
                           mchange=means[1:(nbands-2)],
                           sdchange=sds[1:(nbands-2)],
@@ -182,18 +207,32 @@ axis.labels[1]=1
 axis.labels[10]=10
 axis.labels[19]=100
 animals.bands.df.filtered = filter(animals.bands.df, animal %in% c('K4', 'K2', 'K1', 'K3', 'L1'))
+
+theta.band = data.frame(
+  xmin=c(7, 25, 80), 
+  xmax=c(11, 45, 150), 
+  band=c('theta', 'slow gamma', 'fast gamma'))
+
 gbands = ggplot(animals.bands.df.filtered) +
-  geom_line(aes(x=band, y=mchange, colour=animal), size=1) +
-  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=animal), alpha=0.1)+
-  geom_hline(yintercept=1) +
+  geom_hline(yintercept=1, linetype='dashed', colour='red', size=1) +
+  geom_rect(data=theta.band, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=5, alpha=0.03, fill='blue') +
+  geom_line(aes(x=band, y=mchange, group=animal)) +
+  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=animal), 
+              colour='black', size=0.05, alpha=0.05)+
   scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
   facet_grid(. ~ state) +
   xlab('Frequency (Hz)') +
-  ylab('LFP power change during stim (%)')
+  ylab('LFP power ratio') +
+  gtheme +
+  theme(legend.position = 'none')
 
 gbands
-ggsave(file=paste0(img_dir, '/', '2_baseline_psd_change.svg'), gbands, width=9, height=4)
+#ggsave(file=paste0(img_dir, '/', '2_baseline_psd_change.svg'), gbands, width=9, height=4)
+ggsave(file=paste0(img_dir, '/', '2_psd_change_mobile_vs_immobile.pdf'), gbands,
+       width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
+
 ```{r include=TRUE}
 
 mean.wona = function(X) {
@@ -205,8 +244,9 @@ sd.wona = function(X) {
 }
 
 animals.bands.df = data.frame()
-for (state_name in levels(best.psddf$state)) {
-  animal.df = filter(best.psddf, state == state_name) 
+for (state_name in levels(filtered.psddf$state)) {
+  animal.df = filter(filtered.psddf, state == state_name) 
+    
   animal.df$trial_id_num = as.integer(animal.df$trial_id)
   animal.psd.cols = animal.df %>% 
     select(trial_id_num, starts_with('all_psd_xx')) 
@@ -253,7 +293,8 @@ gbands = ggplot(animals.bands.df) +
   geom_hline(yintercept=1, linetype='dashed') +
   #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
   gtheme +
-  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_y_continuous(breaks=c(0.5, 1.0, 1.5)) +
   scale_color_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), values=c(mobile.col, immobile.col, 'black')) +
   scale_fill_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), values=c(mobile.col, immobile.col, 'black')) +
   xlab('Frequency (Hz)') +
@@ -262,7 +303,9 @@ gbands = ggplot(animals.bands.df) +
   theme(legend.position = 'top')  
 
 gbands
-ggplot2::ggsave(file=paste0(img_dir, '/', '3_psd_change_mobile_vs_immobile.svg'), gbands, width=11, height=8, units='cm')
+#ggplot2::ggsave(file=paste0(img_dir, '/', '3_psd_change_mobile_vs_immobile.svg'), gbands, width=11, height=8, units='cm')
+ggsave(file=paste0(img_dir, '/', '3_psd_change_mobile_vs_immobile.pdf'), gbands,
+       width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
 ```{r}
@@ -270,14 +313,14 @@ library(reshape2)
 animals.bands.df = data.frame()
 
 
-sampled.trials = group_by(best.psddf, state, animal) %>%
+sampled.trials = group_by(filtered.psddf, state, animal) %>%
   select(trial_id) %>%
   sample_n(6) %>%
   ungroup()
 
-samples.df = filter(best.psddf, trial_id %in% sampled.trials$trial_id)
+samples.df = filter(filtered.psddf, trial_id %in% sampled.trials$trial_id)
 
-for (state_name in levels(best.psddf$state)) {
+for (state_name in levels(filtered.psddf$state)) {
   animal.df = filter(samples.df, state == state_name) 
   animal.df$trial_id_num = as.integer(animal.df$trial_id)
   animal.psd.cols = animal.df %>% 
@@ -384,10 +427,11 @@ psddf.all$desc = factor(psddf.all$desc, levels=c('1_before','2_stim','3_after'))
 paired.psddf.off = left_join(psddf.on, psddf.off2, by='trial_id', suffix=c('.fst', '.snd')) %>%
   mutate(change='off')
 ```
-```{r}
 
+```{r}
 paired.psddf.all = psddf.all %>%
-  mutate(paired_group=interaction(animal, desc, lex.order=TRUE))
+  mutate(paired_group=interaction(animal, desc, lex.order=TRUE)) %>%
+  arrange(trial_id)
 paired.psddf.all$paired_group_num=as.integer(paired.psddf.all$paired_group)
 paired.psddf.all$paired_group = as.factor(paired.psddf.all$paired_group)
 ```
@@ -422,6 +466,205 @@ gtheta
 
 ggsave(file=paste0(img_dir, '/', '3_baseline_theta_change.svg'), gtheta, width=9, height=4)
 ```
+
+```{r}
+
+normalise2before = function(df, varname) {
+  var.psddf = filter(df, desc == '1_before') %>%
+    rename_(total_value=varname) %>%
+    right_join(df, by='trial_id', suffix=c('.y','')) %>%
+    filter(total_value > 0) %>%
+    rename_(value=varname) %>%
+    mutate(norm.value = value / total_value) 
+  return(var.psddf)
+}
+
+theta.df.norm = normalise2before(paired.psddf.all, 'pow_theta') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, state, norm.value) %>%
+  mutate(band='Theta\n(7 - 11 Hz)')
+sgamma.df.norm = normalise2before(paired.psddf.all, 'pow_slow_gamma') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, state, norm.value) %>%
+  mutate(band='Slow Gamma\n(25 - 40 Hz)')
+theta.slow.df.norm = normalise2before(paired.psddf.all, 'theta_over_slow') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, state, norm.value) %>%
+  mutate(band='Theta / Slow')
+theta.supratheta.df.norm = normalise2before(paired.psddf.all, 'theta_over_supratheta') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, state, norm.value) %>%
+  mutate(band='Theta / Supra Theta')
+
+fgamma.df.norm = normalise2before(paired.psddf.all, 'pow_fast_gamma') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, state, norm.value) %>%
+  mutate(band='Fast Gamma')
+
+df.norm = bind_rows(theta.df.norm, theta.slow.df.norm, theta.supratheta.df.norm, sgamma.df.norm, fgamma.df.norm) 
+df.norm$band = as.factor(df.norm$band)
+df.norm$band = factor(df.norm$band, levels = levels(df.norm$band)[c(3, 4, 5, 2, 1)])
+df.norm$cond = as.factor(df.norm$state)
+
+df.norm %>%
+  group_by(band, state)  %>%
+  dplyr::summarise(value.mean=mean(norm.value) %>% round(2),
+                   value.med=median(norm.value) %>% round(2) ,
+                   value.sem=sem(norm.value) %>% round(2))
+df.norm %>%
+  ggpubr::ggboxplot(x='band' ,y='norm.value', color='state') +
+  #ggplot() +
+  #geom_dotplot(aes(x=band, y=norm.value, fill=factor(cond)), 
+  #             binaxis = "y", stackdir = "center", 
+  #             binwidth = 1, dotsize=0.5, stackratio=0.9, position = 'dodge') +
+  geom_hline(yintercept=1, linetype='dashed') +
+  stat_compare_means(aes(label = paste0(..p.format..)), 
+                     method='wilcox.test', 
+                     comparisons = list(c('1','2'), c('3', '4'))) +
+  gtheme + 
+  theme(legend.position='none',
+        axis.text.x=element_text(angle = 30, hjust = 1)) +
+  scale_color_manual(labels=c('', ''), values=c(laser.col, scop.col, 'black')) +
+  ylim(c(0,4)) +
+  ylab('') +
+  xlab('') 
+
+ggsave(file=paste0(img_dir, '/', '7_urethane_psd_change_boxplot_inset.pdf'), 
+       width=col_width, height=6, unit='cm', dpi=300, device=cairo_pdf)
+
+```
+Changes in bands power
+```{r}
+df.norm %>%
+  filter(animal != 'K4') %>%
+  group_by(band, state) %>%
+  dplyr::summarise(mean.val= mean(norm.value) %>% round(2),
+                   med.val= median(norm.value) %>% round(2),
+                   sem.val=sem(norm.value) %>% round(2))
+```
+
+
+Paired tests
+```{r}
+state_name = 'Immobile'
+state_name = 'Mobile'
+metric_name = 'pow_theta'
+subset.df = bind_rows(psddf.off, psddf.on) %>%
+  filter(state == state_name,
+         animal == 'K4')
+nrow(subset.df)
+s.on = summary(subset(subset.df, laserOn ==0)[metric_name])
+print('Laser off')
+s.on[3]
+s.on[4]
+
+print('Laser on')
+s.off = summary(subset(subset.df, laserOn ==1)[metric_name])
+s.off[3]
+s.off[4]
+
+test.res = wilcox.test(formula(paste(metric_name, '~ laserOn')), subset.df, paired=TRUE)
+test.res['p.value']
+```
+
+Probably need two different models for mobile and immobile.
+```{r}
+plot.model.diagnostics = function(m, animals, states) {
+  df = data.frame(res=unname(residuals(m)), fitted=unname(fitted(m)), animal=animals, state=states) 
+  
+  ggplot(df) +
+    geom_point(aes(x=res, y=fitted, colour=animal, shape=state)) +
+    theme(legend.position = 'none') -> g1
+  
+  X=qqnorm(residuals(m.full), plot.it=FALSE)
+  data.frame(x=X$x, y=X$y, animal=animals, state=states) %>%
+    ggplot() +
+    geom_point(aes(x=x, y=y, colour=animal, shape=state)) +
+    stat_qq_line(mapping=aes(sample=res), data=df) +
+    xlab('Theoretical quantiles') +
+    ylab('Sample quantiles') +
+    theme(legend.position = 'top') -> g2
+  
+  plot_grid(g1,g2)
+}
+
+psddf.starts = bind_rows(psddf.off, psddf.on)  %>%  #filter(animal != 'K4') %>%
+  filter(peak_theta > 2) 
+
+immobile.df = filter(psddf.starts, state == 'Immobile')
+mobile.df = filter(psddf.starts, state == 'Mobile') %>%
+  filter(peak_theta >= 8)
+
+df = psddf.starts
+m.full = lmerTest::lmer(log(theta_over_supratheta) ~ laserOn * state + (1 + laserOn + state | animal), data=psddf.starts, REML = TRUE) 
+#m.full = lmerTest::lmer(pow_theta ~ laserOn  + (1 + laserOn | animal), data=df, REML = TRUE) 
+#m.nolaser = lmerTest::lmer(swr_incidence ~ state + (1 + state | animal), data=psddf.starts, REML = TRUE) 
+summary(m.full)
+plot.model.diagnostics(m.full, df$animal, df$state)
+coef(m.full)$animal
+#change.mean = X[,2] / X[,1]
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+#anova(m.full, m.nolaser, ddf='Satterthwaite')
+```
+LM
+```{r}
+m.lm = lm(peak_theta ~ laserOn, data=mobile.df)
+m.lm
+plot(m.lm)
+summary(m.lm)
+```
+
+
+```{r}
+filtered.psddf %>%
+  filter(peak_theta > 0) %>%
+  ggplot() +
+  geom_histogram(aes(x=dom_freq, fill=laserOn), alpha=0.3, binwidth = 1) +
+  facet_grid(. ~ state)
+```
+
+Increase in count of the theta-dominated trials
+```{r}
+psddf.all %>%
+  mutate(theta.dom = dom_freq >= 7 & dom_freq <= 10,
+         slow.dom = dom_freq < 7,
+         vslow.dom = dom_freq <= 4,
+         supra.dom = dom_freq > 10 & dom_freq < 25,
+         gamma.dom = dom_freq >= 25 & dom_freq <= 45) %>%
+  group_by(state, desc) %>%
+  dplyr::summarise(n=n(),
+                   theta.pct = sum(theta.dom)/n %>% round(2),
+                   slow.pct = sum(slow.dom)/n %>% round(2),
+                   vslow.pct = sum(vslow.dom)/n %>% round(2),
+                   supra.pct = sum(supra.dom)/n %>% round(2),
+                   gamma.pct = sum(gamma.dom)/n %>% round(2)) 
+
+```
+
+  
+Pow theta is higher in immobile animals... Could be explained by effect of previous stimulation on subsequent recordings,
+immobile recordings made after mobile ones.
+```{r}
+psddf.all %>%
+  filter(date == '2018-09-06') %>%
+  ggplot() +
+  geom_jitter(aes(x=animal, y=peak_theta, colour=state, shape=laserOn, size=1), width=0.1)
+```
+But correlation between theta and trial number not clear
+```{r}
+psddf.off %>%
+  filter(date == '2018-09-06', state =='Immobile') %>%
+  ggplot() +
+  geom_point(aes(x=trial, y=pow_theta, colour=animal, shape=state), width=0.1, size=2)
+```
+Peak freq of theta:
+```{r}
+bind_rows(psddf.off, psddf.on) %>%
+  filter(state=='Immobile') %>%
+  ggplot() +
+  geom_jitter(aes(x=animal, y=peak_theta, shape=state, color=laserOn), width=0.2)
+```
+
 
 Slow Gamma (25 - 35 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
 
@@ -499,6 +742,37 @@ paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
 
 Ripple incidence is significantly lowered by the laser stimulation (paired Wilcoxon test, p-value=`r test_val$p.value`), the effect is more prominent in sleep.
 
+Baseline incidence rates for mobile and immobile
+```{r}
+group_by(psddf.off, state, laserOn) %>%
+  dplyr::summarise(incidence.mean = mean(swr_incidence) %>% round(2),
+                   incidence.med = median(swr_incidence) %>% round(2),
+                   incidence.sd = sem(swr_incidence) %>% round(2),
+                   n=n())
+group_by(psddf.on, state, laserOn) %>%
+  dplyr::summarise(incidence.mean = mean(swr_incidence) %>% round(2),
+                   incidence.med = median(swr_incidence) %>% round(2),
+                   incidence.sd = sem(swr_incidence) %>% round(2),
+                   n=n())
+
+```
+
+Distribution of SWR incidence change rates
+```{r}
+A = dplyr::select(psddf.off, trial_id, laserOn, state, swr_incidence) 
+B = dplyr::select(psddf.on, trial_id, laserOn, state, swr_incidence)
+left_join(A, B, by=c('trial_id', 'state'), suffix=c('.a', '.b')) %>% 
+  mutate(incidence.diff = swr_incidence.a - swr_incidence.b,
+         incidence.decrease = incidence.diff / swr_incidence.a) %>% 
+  group_by(state) %>%
+  dplyr::summarise(decrease.mean=mean(incidence.diff) %>% round(2),
+                   decrease.median=median(incidence.diff) %>% round(2),
+                   decrease.sem=sem(incidence.diff) %>% round(2),
+                   n=n())
+```
+
+
+
 ```{r include=TRUE}
 ggplot(psddf.all) +
     geom_boxplot(aes(x=desc, y=swr_incidence, fill=desc), notch=FALSE) +
@@ -513,6 +787,41 @@ Paired comparison of ripple incidence during the same trial shows the effect of 
 my.paired.plot(paired.psddf.all, 'swr_incidence') +
   ylab('Ripple incidence (Hz)')
 ```
+SWR incidence summary
+```{r}
+print('Mobile')
+summary(subset(psddf.off, state == 'Mobile')$swr_incidence) 
+sem(subset(psddf.off, state == 'Mobile')$swr_incidence) 
+
+print('Immobile')
+summary(subset(psddf.off, state == 'Immobile')$swr_incidence) 
+sem(subset(psddf.off, state == 'Immobile')$swr_incidence) 
+```
+
+
+```{r}
+library(lme4)
+library(lmerTest)
+
+psddf.starts = bind_rows(psddf.off, psddf.on) 
+
+m.immobile.swr = lmerTest::lmer(swr_incidence ~ laserOn + (1 | animal), data=psddf.starts, subset = state == 'Immobile', REML = TRUE) 
+m.mobile.swr = lmerTest::lmer(swr_incidence ~ laserOn + (1 | animal), data=psddf.starts, subset = state == 'Mobile', REML = TRUE) 
+summary(m.mobile.swr)
+anova(m.immobile.swr, refit=FALSE, ddf='Satterthwaite')
+anova(m.mobile.swr, refit=FALSE, ddf='Satterthwaite')
+
+m.swr = lmerTest::lmer(swr_incidence ~ laserOn + state + (1 | animal), data=psddf.starts, REML = TRUE) 
+m.full = lmerTest::lmer(swr_incidence ~ laserOn * state + (1 | animal), data=psddf.starts, REML = TRUE) 
+m.nostate = lmerTest::lmer(swr_incidence ~ laserOn + (1 | animal), data=psddf.starts, REML = TRUE) 
+summary(m.full)
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+anova(m.swr, m.nostate, ddf='Satterthwaite')
+
+```
+
+
+``` 
 
 
 After the laser activation there is fewer of the ripples at the high-frequency spectrum.

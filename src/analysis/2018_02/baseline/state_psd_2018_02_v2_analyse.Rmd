@@ -592,8 +592,6 @@ paired.state %>%
   #             binwidth = 0.01, dotsize=0.8, stackratio=0.8) +
   #geom_line(aes(group=trial_id), size=0.3, alpha=0.4, linetype=1) +
   scale_x_discrete(labels = xlabels) +
-  scale_colour_manual(values = c(immobile.col, mobile.col)) +
-  scale_fill_manual(values = c(immobile.col, mobile.col)) +
   facet_grid(. ~ state) +
   ylab('Ripple incidence (Hz)') + 
   xlab('') +
@@ -621,6 +619,8 @@ ggpaired(paired.state, x='laserOn', y='swr_incidence', facet.by='state', color='
                      comparisons = my_comparisons) +
   scale_colour_manual(values = c("black", 'blue')) +
   xlab('') + ylab('Ripple incidence (Hz)') +
+  ylim(c(0,0.6))+
   gtheme + theme(legend.position = 'top')
+ggplot2::ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_comparison.svg'), width=11, height=8.5, units='cm', dpi=300)
 ```
 

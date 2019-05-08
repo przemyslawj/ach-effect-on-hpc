@@ -47,7 +47,7 @@ psddf.light = read_csv(paste0(data_dir,'/','psd_table_urethane_light.csv')) %>%
   mutate(cond = 'Light')
   #filter(trial != 7)
 psddf.scopolamine = read_csv(paste0(data_dir,'/','psd_table_urethane_scopolamine.csv')) %>%
-  mutate(cond = 'Scopolamine')
+  mutate(cond = 'Scopolamine') %>%
   #filter(trial != 8) %>%
   #filter(trial != 9)
 psddf.scopolamine.weird = read_csv(paste0(data_dir,'/','psd_table_urethane_scopolamine.csv')) %>%
@@ -68,6 +68,7 @@ psddf$laserOn = as.factor(psddf$laserOn)
 psddf = mutate(psddf, trial_id=paste(cond, trial ,sep='_')) 
   
 psddf$trial_id = as.factor(psddf$trial_id)
+psddf$animal = as.factor(psddf$animal)
 ```
 
 
@@ -157,15 +158,23 @@ for (cond_name in levels(psddf$cond)) {
   animals.bands.df = rbind(animals.bands.df, bands.df)
 }
 
+freq.band = data.frame(
+  xmin=c(2, 20, 80), 
+  xmax=c(5, 40, 150), 
+  band=c('theta', 'slow gamma', 'fast gamma'))
+
 axis.breaks=c(1:9,seq(10,100,10))
 axis.labels=rep('', length(axis.breaks))
 axis.labels[1]=1
 axis.labels[10]=10
 axis.labels[19]=100
 gbands = ggplot(animals.bands.df) +
-  geom_line(aes(x=band, y=mchange, colour=cond), size=1) +
-  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=cond, fill=cond), alpha=0.1)+
   geom_hline(yintercept=1, linetype='dashed') +
+  geom_rect(data=freq.band, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=15, alpha=0.05, fill='grey10') +
+  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=cond, fill=cond), 
+              colour='black', size=0.05, alpha=0.1)+
+  geom_line(aes(x=band, y=mchange, colour=cond), size=1) +
   #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
   gtheme +
   scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
@@ -174,6 +183,7 @@ gbands = ggplot(animals.bands.df) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
   labs(colour = "", fill='') +
+  scale_y_continuous(breaks=c(1, 3, 5, 7,9)) +
   theme(legend.position = 'top')  
 
 gbands
@@ -445,7 +455,7 @@ df.norm %>%
   theme(legend.position='none',
         axis.text.x=element_text(angle = 30, hjust = 1)) +
   scale_color_manual(labels=c('', ''), values=c(laser.col, scop.col, 'black')) +
-  ylim(c(0,4)) +
+  scale_y_continuous(breaks=c(1, 3, 5), limits=c(0,5)) +
   ylab('') +
   xlab('') 
 
@@ -458,13 +468,15 @@ Table with stats from plot above
 ```{r}
 df.norm %>%
   group_by(band, cond) %>%
-  summarise(mean.val = mean(norm.value), median.val = median(norm.value), sem.val=sem(norm.value))
+  summarise(mean.val = mean(norm.value) %>% round(2), 
+            median.val = median(norm.value) %>% round(2), 
+            sem.val=sem(norm.value) %>% round(2))
 ```
 
 
 for theta
 ```{r}
-wilcox.test(norm.value ~ cond, theta.df.norm)
+subset.df = 
 ```
 
 for slow gamma
@@ -542,14 +554,20 @@ ggsave(file=paste0(img_dir, '/', '7_ripple_incidence_bar', cond_name, '.pdf'),
 ```{r}
 paired.psddf.all %>%
   group_by(paired_group) %>%
-  summarise(mean.swr = mean(swr_incidence), median.swr=median(swr_incidence), sem.swr=sem(swr_incidence))
+  summarise(mean.swr = mean(swr_incidence) %>% round(2), 
+            median.swr=median(swr_incidence) %>% round(2), 
+            sem.swr=sem(swr_incidence) %>% round(2),
+            mean.theta_freq = mean(peak_theta) %>% round(2),
+            median.theta_freq = median(peak_theta) %>% round(2),
+            sem.theta_freq=sem(peak_theta) %>% round(2))
   
 ```
 
+
 ```{r}
 paired.psddf.all %>%
-  filter(desc != '3_after') -> wilcox.dat
-  wilcox.test(swr_incidence ~ paired_group, wilcox.dat, paired=TRUE)
+  filter(desc != '3_after', cond == 'Light') -> wilcox.dat
+wilcox.test(swr_incidence ~ paired_group, wilcox.dat, paired=TRUE)
 ```
 
 
