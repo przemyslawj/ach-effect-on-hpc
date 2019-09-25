@@ -36,8 +36,26 @@ function [meta] = ReadMeta(binName, path)
     %meta.nChans = 32;
     meta.binName = binName;
     meta.path = path;
+    
+    meta.snsSaveChanSubset = range2array(meta.snsSaveChanSubset);
+    assert(meta.nChans == numel(meta.snsSaveChanSubset));
 end % ReadMeta
 
+function [c] = range2array(range_str)
+    elements = split(range_str,',');
+    c = [];
+    for i = 1:numel(elements)
+        element = elements{i};
+        k = strfind(element, ':');
+        if k > 0
+            range_parts = split(element, ':');
+            c_part = str2double(range_parts(1)) : str2double(range_parts(2));
+            c = horzcat(c, c_part);
+        else
+            c(end + 1) = str2double(element);
+        end
+    end
+end
 
 
 
