@@ -5,7 +5,7 @@ sleeping_trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(sleeping_trials_fpath, 'ReadVariableNames', true);
 %expstable = expstable(strcmp(expstable.animal, animal_code),:);
 
-nchans = 4;
+nchans = 4;     
 
 nexp = size(expstable, 1);
 result_table = table();

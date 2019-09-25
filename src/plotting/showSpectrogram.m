@@ -35,7 +35,7 @@ end
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
-%dataArray = filter50Hz(dataArray, fs);
+dataArray = filter50Hz(dataArray, fs);
 
 %% Filter LFP for ripples
 filtered = zeros(size(dataArray));
@@ -50,10 +50,10 @@ for chan = 1:nChans
     filtered(chan,:) = filtfilt(b, a, dataArray(chan,:));
 end
 
-lengthSeconds = 1;
-startSec = 28.5;
+lengthSeconds = 0.5;
+startSec = 28.7;
 timeIndecies = (startSec * fs) : ((startSec + lengthSeconds) * fs);
-timeIndecies = 1:size(dataArray, 2);
+%timeIndecies = 1:size(dataArray, 2);
 
 
 freqrange = 1:2:50;

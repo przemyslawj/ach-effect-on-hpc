@@ -211,8 +211,10 @@ for i = 1:size(ripples,1)
     x = signal(start_i:end_i);
 
     [pxx, freqs] = pmtm(x, 3, length(x), frequency);
-    [~, maxValIndex] = max(pxx);
-    ripples(i,5) = freqs(maxValIndex);
+    ripple_band_i = find(freqs > 80);
+    ripple_band_freqs = freqs(ripple_band_i);
+    [~, maxValIndex] = max(pxx(ripple_band_i));
+    ripples(i,5) = ripple_band_freqs(maxValIndex);
 end
 
 %% Optionally, plot results

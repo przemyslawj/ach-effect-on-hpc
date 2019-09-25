@@ -28,6 +28,7 @@ result_table.pow_theta = zeros(nexp * 3 * nchans, 1);
 result_table.peak_theta = zeros(nexp * 3 * nchans, 1);
 
 result_table.pow_slow_gamma = zeros(nexp * 3  * nchans, 1);
+result_table.peak_slow_gamma = zeros(nexp * 3 * nchans, 1);
 result_table.pow_med_gamma = zeros(nexp * 3 * nchans, 1);
 result_table.pow_fast_gamma = zeros(nexp * 3 * nchans, 1);
 result_table.pow_above_theta = zeros(nexp * 3 * nchans, 1);
@@ -53,12 +54,12 @@ for i = 1:nexp
     dataArray = dataArray';
     lengthSeconds = size(dataArray, 2) / fs;
 
-    rec_times = [0 15;
-                 15 30;
-                 45 60; ];    
-%     rec_times = [0 60;
-%                  60 120;
-%                  120 180; ];
+%     rec_times = [0 15;
+%                  15 30;
+%                  45 60; ];    
+    rec_times = [0 60;
+                 60 120;
+                 120 180; ];
 
     time = (1:size(dataArray,2)) / fs;
 
@@ -121,6 +122,7 @@ for i = 1:nexp
             result_table.pow_theta(entry_i) = TotalBandPower(freqs, pxx, theta);
             result_table.peak_theta(entry_i) = PeakFreq(freqs, pxx, theta);
             result_table.pow_slow_gamma(entry_i) = TotalBandPower(freqs, pxx, slow_gamma);
+            result_table.peak_slow_gamma(entry_i) = PeakFreq(freqs, pxx, slow_gamma);
             result_table.pow_med_gamma(entry_i) = TotalBandPower(freqs, pxx, med_gamma);
             result_table.pow_fast_gamma(entry_i) = TotalBandPower(freqs, pxx, fast_gamma);
             result_table.pow_above_theta(entry_i) = TotalBandPower(freqs, pxx, above_theta);
@@ -166,12 +168,6 @@ writetable(all_ripples, [rootdir filesep 'ripples_urethane_' experiment '.csv'])
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
     pow = bandpower(pxx,f1,band,'psd');
-end
-
-function [ pow ] = TotalBandPower2(f1, pxx, band)
-    %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
-    band_freqs = find(f1 >= band(1) & f1 <= band(2));
-    pow = -trapz(f1(band_freqs), log10(pxx(band_freqs))) / (band(2) - band(1));
 end
 
 function [ freq ] = PeakFreq(f1, pxx, band)

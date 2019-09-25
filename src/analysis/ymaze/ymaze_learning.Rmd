@@ -12,11 +12,21 @@ library(tidyr)
 library(stringr)
 library(PairedData)
 select = dplyr::select
+library(viridis)
 ```
 
 ```{r}
+px2pt = 1/(ggplot2::.pt*72.27/96)
 gtheme = theme_minimal() + theme_cowplot() + 
-  theme(text = element_text(size=11, family = 'Arial'), axis.text = element_text(size=11)) 
+  theme(text = element_text(size=8, family = 'Arial'), 
+        panel.background = element_rect(fill = 'white'),
+        line = element_line(size = px2pt),
+        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.text.x=element_text(size=8, colour = "black"),
+        axis.text.y=element_text(size=8, colour = "black"),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8))
 data_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/data/'
 img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/ymaze/'
 ```
@@ -26,7 +36,7 @@ sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
 ```
 
 ```{r}
-df.raw = read_csv(paste0(data_dir, 'learning_perf.csv'))
+df.raw = read_csv(paste0(data_dir, 'learning_perf_stim.csv'))
 df = gather(df.raw, 'mouse.id', 'correct', 2:ncol(df.raw)) %>%
   filter(!is.na(correct)) %>%
   filter(mouse.id != 0) %>%
@@ -40,6 +50,8 @@ df$cond = as.factor(df$cond)
 df$correct = as.integer(df$correct)
 df$mouse.no = as.integer(df$mouse.no)
 
+cond.cols = c('#440154ff', '#31688eff', '#6000ff98', '#35b779ff')
+
 ```
 
 ```{r}
@@ -52,6 +64,7 @@ df %>%
   ggplot() +
   #geom_boxplot(aes(x=day, y=correct, colour=cond))
   geom_boxplot(aes(x=day, y=correct, colour=cond)) +
+  scale_color_manual(values=cond.cols) +
   gtheme +
   theme(legend.position='top') +
   labs(colour='', fill='') +
@@ -69,10 +82,13 @@ df %>%
   geom_ribbon(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect, fill=cond), alpha=0.1) +
   geom_hline(yintercept = 50, linetype='dashed') +
   gtheme +
-  theme(legend.position='none') +
+  scale_color_manual(values=cond.cols) +
+  scale_fill_manual(values=cond.cols) +
+  #theme(legend.position='none') +
   labs(colour='', fill='') +
   xlab('Day') + ylab('Correct (%)')
-ggsave(paste0(img_dir, 'learning_curve.svg'), width=8, height=7.5, units='cm')
+ggsave(paste0(img_dir, 'learning_curve.pdf'), width=6.5, 
+       height=6.5, unit='cm', dpi=300, device=cairo_pdf)
   
 ```
 
@@ -118,16 +134,19 @@ df.learnt %>%
                      comparisons=list(c(1,3), c(1,4)),
                      label.y=c(6.5,7.4)) +
   gtheme +
+  scale_color_manual(values=cond.cols) +
+  scale_fill_manual(values=cond.cols) +
   theme(axis.text.x=element_text(angle = 45, hjust = 1)) +
   xlab('') + ylab('Days until learned (≥ 80 %)') +
   theme(legend.position = 'none') 
 
-ggsave(paste0(img_dir, 'learnt_boxplot.svg'), width=7, height=10, units='cm')
+ggsave(paste0(img_dir, 'learnt_boxplot.pdf'), width=5.6, 
+       height=7.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
 ```{r}
 df.learnt.rew = filter(df.learnt, cond %in% c('No light', 'Reward'))
-df.learnt.throughout = filter(df.learnt, cond %in% c('No light', 'Throughout maze'))
+df.learnt.throughout = filter(df.learnt, cond %in% c('No light', 'Throughout'))
 wilcox.test(learnt.day ~ cond, df.learnt.throughout, subset = criterion=='learnt.80')
 wilcox.test(learnt.day ~ cond, df.learnt.rew, subset = criterion=='learnt.80')
 ```
@@ -141,6 +160,12 @@ dunnTest(learnt.day ~ cond, df.learnt.90, method='none')
 ```
 
 # Wild type test
+```{r}
+m.aov = aov(learnt.day ~ cond, df.learnt, subset=criterion=='learnt.80') 
+summary(m.aov)
+TukeyHSD(m.aov, 'cond')
+```
+
 ```{r}
 wtdf.raw = read_csv(paste0(data_dir, 'wt_learning_perf.csv'))
 wtdf = gather(wtdf.raw, 'mouse.id', 'correct', 2:ncol(wtdf.raw)) %>%
@@ -170,9 +195,12 @@ wtdf %>%
   geom_hline(yintercept = 50, linetype='dashed') +
   gtheme +
   theme(legend.position='none') +
+  scale_color_manual(values=c(cond.cols[1], cond.cols[4])) +
+  scale_fill_manual(values=c(cond.cols[1], cond.cols[4])) +
   labs(colour='', fill='') +
   xlab('Day') + ylab('Correct (%)')
-ggsave(paste0(img_dir, 'wt_learning_curve.svg'), width=8, height=7.5, units='cm')
+ggsave(paste0(img_dir, 'wt_learning_curve.pdf'), width=6, 
+       height=6, units='cm', dpi=300, device=cairo_pdf)
   
 ```
 
@@ -191,15 +219,21 @@ wtdf.learnt %>%
   geom_dotplot(aes(fill=cond), binaxis="y", stackdir="center", 
                binwidth=0.2, dotsize=1, stackratio=0.8, alpha=0.7) +
   stat_compare_means(aes(label = paste0('p=', ..p.format..)),
-                     method='wilcox.test',
+                     method='t.test',
                      comparisons=list(c(1,2))) +
   gtheme +
   theme(axis.text.x=element_text(angle = 30, hjust = 1)) +
+  scale_color_manual(values=c(cond.cols[1], cond.cols[4])) +
+  scale_fill_manual(values=c(cond.cols[1], cond.cols[4])) +
   xlab('') + ylab('Days until learned (≥ 80 %)') +
   ylim(c(1,7))+
   theme(legend.position = 'none') 
 
-ggsave(paste0(img_dir, 'wtlearnt_boxplot.svg'), width=6, height=8, units='cm')
+ggsave(paste0(img_dir, 'wtlearnt_boxplot.pdf'), width=5.5, 
+       height=6, units='cm', dpi=300, device=cairo_pdf)
 
+```
+```{r}
+t.test(learnt.day ~ cond, data=wtdf.learnt)
 ```
 

@@ -1,5 +1,5 @@
 path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
-path = '/mnt/DATA/Prez/N&A_rest/2018-03-06/signal';
+path = '/mnt/DATA/Clara/diode_baseline/20190906/BD031ActiveStimON1_g0';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
