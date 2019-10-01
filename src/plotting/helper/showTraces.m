@@ -1,11 +1,10 @@
-function [] = showTraces( x, fs, figure_title, channelTable )
+function [] = showTraces( x, fs, figure_title, channelTable, shift )
 
 if nargin < 3
     figure_title = '';
 end
 
 times = (1:size(x,2)) / fs;
-shift = 5 * median(std(x,[],2));
 
 vars = struct();
 vars.shift = shift;
@@ -19,17 +18,21 @@ rec_len_sec = vars.max_timewindow * 0.5;
 vars.channelTable = channelTable;
 [~, vars.channelOrder] = sort(channelTable.channel_name);
 
-figure('Name', figure_title);
+figure('Name', figure_title,...
+    'Position', [100 100 1200 800]);
 nfigure = length(findobj('type','figure'));
 plotTraces(0, rec_len_sec, vars);
 
 sliderHandle = uicontrol('Style', 'slider', ...
-          'Position', [10 20 500 20],...
+          'Position', [10 20 800 20],...
+          'SliderStep', [1 / vars.lengthSeconds / vars.max_timewindow,...
+                         10 / vars.lengthSeconds / vars.max_timewindow],...
           'Tag', sprintf('timeSlider_%d', nfigure)); 
 set(sliderHandle,'Callback',{@sliderCallback, vars});
 
 zoomSliderHandle = uicontrol('Style', 'slider', ...
           'Position', [10 50 100 20],...
+          'SliderStep', [0.1, 0.3],...
           'Tag', sprintf('zoomSlider_%d', nfigure));
 zoomSliderHandle.Value = 0.5;
 set(zoomSliderHandle,'Callback',{@sliderCallback, vars});
@@ -43,9 +46,6 @@ function [] = plotTraces(time_start_sec, rec_len_sec, vars)
     for i = 1:nchan
         ch = vars.channelOrder(i);
         trace = vars.x(ch,:);
-        if strcmp(vars.channelTable.location{ch}, 'Laser')
-            trace = trace / max(trace) / 5;
-        end
         shifted_trace = (nchan - i) * vars.shift + trace;
         plot(vars.times(indecies), shifted_trace(indecies));
         hold on;

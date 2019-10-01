@@ -7,8 +7,11 @@ function [] = plotData(fs, raw, filtered, ...
     times = indecies / fs;
     
     subplot(3,1,1);
-    plotSWR(times, filtered(indecies), fs, ripple_starts, ripple_ends);
-    %ylim([-0.05 0.05]);
+    y_norm = filtered / std(filtered);
+    plotSWR(times, y_norm(indecies), fs, ripple_starts, ripple_ends);
+    %ylim_val = quantile(y_norm, [0.999]);
+    ylim_val = 10;
+    ylim([-ylim_val ylim_val]);
 
     subplot(3,1,2);
     plot(times, normalizedSquaredSignal(indecies));

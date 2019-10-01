@@ -1,5 +1,4 @@
-function [] = plotSWR(x, y, fs, swr_starts, swr_endings)
-    y_norm = y / std(y);
+function [] = plotSWR(x, y_norm, fs, swr_starts, swr_endings)
     plot(x, y_norm);
     hold on;
     %maxY = min(0.045, max(y) * 1.4);
