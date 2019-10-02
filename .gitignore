@@ -1,0 +1,7 @@
+*.csv
+*.RData
+*.Rhistory
+*.RDataTmp
+*.svg
+src/ymaze_rec_imgs/
+img_workspace
