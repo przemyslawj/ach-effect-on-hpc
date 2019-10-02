@@ -30,14 +30,18 @@ if isempty(channelTable)
 end
 
 for chan = 1:size(dataArray,1)
+    loc = channelTable.location{chan};
     if strcmp(loc, 'Laser')
         x = dataArray(chan,:);
         x = x - mean(x);
-        dataArray(chan,:) = x / max(x) / 50;
+        dataArray(chan,:) = x / max(x) / 20;
     end
 end
 shift = 5 * median(std(dataArray, [], 2));
 showTraces(dataArray, fs, binName, channelTable, shift);
+%% Diode signal
+[diodeData, diodeTable] = subtractDiodeSignal(dataArray, keepChannels, channelTable);
+showTraces(diodeData, fs, binName, diodeTable, shift);
 
 %% Filter LFP
 filtered = zeros(size(dataArray));
@@ -52,7 +56,7 @@ for chan = 1:size(dataArray,1)
     x = dataArray(chan,:);
     x = x - mean(x);
     if strcmp(loc, 'EMG') 
-        filtered(chan,:) = x / max(x) / 200;
+        filtered(chan,:) = x / max(x) / 20;
     elseif strcmp(loc, 'Laser')
         filtered(chan,:) = x / 5;
     else
@@ -63,4 +67,6 @@ end
 shift = 10 * median(std(filtered, [], 2));
 showTraces(filtered, fs, binName, channelTable, shift);
 
-
+%% Diode signal
+[filteredDiodeData, filteredDiodeTable] = subtractDiodeSignal(filtered, keepChannels, channelTable);
+showTraces(filteredDiodeData, fs, binName, filteredDiodeTable, shift);
