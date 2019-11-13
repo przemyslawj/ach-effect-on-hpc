@@ -206,7 +206,7 @@ ripples(duration > maxRippleDuration/1000,:) = [];
 
 %% Calculate peak frequency of the ripple
 for i = 1:size(ripples,1)
-    start_i = int32((ripples(i,1) - time(1)) * frequency);
+    start_i = max(1, int32((ripples(i,1) - time(1)) * frequency));
     end_i = int32((ripples(i,3) - time(1)) * frequency);
     x = signal(start_i:end_i);
 

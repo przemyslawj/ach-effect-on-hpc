@@ -1,6 +1,6 @@
 path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
 path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
-path = '/mnt/DATA/Clara/diode_baseline/20190906/BD031ActiveStimON1_g0';
+path = '/mnt/DATA/Prez/y-maze/2019-11-12/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
@@ -9,12 +9,11 @@ meta = ReadMeta(binName, path);
 %lengthSeconds = min(40, str2double(meta.fileTimeSecs) - secondOffset);
 lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
 %lengthSeconds = 30;
+
 animal_code = binName(1:2);
-channelTable = findOmneticChannels(...
-    '/mnt/DATA/Clara/diode_baseline/channels.csv',...
-    animal_code);
-keepChannels = intersect(meta.snsSaveChanSubset, channelTable.channel, 'sorted');
-channelTable = channelTable(ismember(channelTable.channel, keepChannels), :);
+channelTable = readChannelTable(...
+    '/mnt/DATA/Prez/y-maze/channels_reversed_short.csv',...
+    animal_code, meta);
 
 nChans = size(channelTable, 1);
 
@@ -23,26 +22,19 @@ dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 fs = meta.nSamp / 10;
 %dataArray = filter50Hz(dataArray, fs);
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
-dataArray = dataArray(ismember(meta.snsSaveChanSubset, keepChannels),:);
+dataArray = dataArray(channelTable.rec_order,:);
 
 %% Filter LFP
-filtered = zeros(size(dataArray));
-passband = [80 250];
-nyquist = fs / 2;
-filterOrder = 4;
-filterRipple = 20;
-[b, a] = cheby2(filterOrder,filterRipple,passband/nyquist);
+filtered = applyRippleFilter(dataArray, channelTable, fs);
 
-for chan = 1:nChans
-    filtered(chan,:) = filtfilt(b, a, dataArray(chan,:));
-end
+%TODO calculate on diode signal
 
 %% Plot SWR
 for chan = 1:nChans
     time=(1:size(filtered,2))/fs;
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...
                                  'frequency', fs, ...
-                                 'thresholds', [2 6 0.01],...
+                                 'thresholds', [2.5 6 0.01],...
                                  'durations', [10 40 350]);
     if ~isempty(ripples)                               
         ripple_starts = ripples(:,1);

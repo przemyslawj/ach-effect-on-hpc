@@ -1,9 +1,10 @@
 datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
+datarootdir = '/mnt/DATA/Prez/y-maze/2019-11-12/signal';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-subplots = 0;
+subplots = 1;
 
 meta = ReadMeta(binName, path);
 
@@ -12,21 +13,15 @@ tracking_filepath = get_trackingfilepath(datarootdir, binName);
 binNameParts = strsplit(binName, '_g0');
 expname = binNameParts{1};
 
-secondOffset = 0;
+secondOffset = 4;
 lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 60);
 
 nChans = meta.nChans;
 
 animal_code = binName(1:2);
-
-channelList = findSelectedChannels(...
-    '/mnt/DATA/Clara/ymaze/selected_electrodes.csv',...
-    animal_code);
-
-if isempty(channelList)
-    channelList=1:nChans;
-end
-
+channelTable = readChannelTable(...
+    '/mnt/DATA/Prez/y-maze/channels_reversed_short.csv',...
+    animal_code, meta);
 fs = 600;
 time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
 if ~isempty(time_mouse_arrived)
@@ -34,43 +29,39 @@ if ~isempty(time_mouse_arrived)
 end
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
+dataArray = dataArray(channelTable.rec_order,:);
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
-dataArray = filter50Hz(dataArray, fs);
+%dataArray = filter50Hz(dataArray, fs);
 
 %% Filter LFP for ripples
-filtered = zeros(size(dataArray));
-passband = [80 250];
-nyquist = fs / 2;
-filterOrder = 4;
-filterRipple = 20;
-[b, a] = cheby2(filterOrder,filterRipple,passband/nyquist);
+filtered = applyRippleFilter(dataArray, channelTable, fs);
 
-for chan = 1:nChans
-    % Use MATLAB built-in function
-    filtered(chan,:) = filtfilt(b, a, dataArray(chan,:));
-end
-
-lengthSeconds = 0.5;
-startSec = 28.7;
-timeIndecies = (startSec * fs) : ((startSec + lengthSeconds) * fs);
-%timeIndecies = 1:size(dataArray, 2);
+%lengthSeconds = 0.5;
+%startSec = 28.7;
+%timeIndecies = (startSec * fs) : ((startSec + lengthSeconds) * fs);
+timeIndecies = 1:size(dataArray, 2);
 
 
 freqrange = 1:2:50;
-for i = 1:numel(channelList)
-    channel = channelList(i);
-    figure('Name', [binName '-channel-' num2str(channel)]);
+for chan_i = 1:size(channelTable, 1)
+    loc = channelTable.location(chan_i);
+    if strcmp(loc, 'EMG') || strcmp(loc, 'Laser')
+        continue
+    end
+    figure('Name', [binName '-' channelTable.channel_name{chan_i} ...
+                    ', channel:' num2str(channelTable.channel(chan_i))]);
     % Raw signal
     subplot(4,1,1);
     timepoints = (1:size(dataArray,2)) / fs;
-    plot(timepoints(timeIndecies), dataArray(channel,timeIndecies));
+    plot(timepoints(timeIndecies), dataArray(chan_i,timeIndecies));
     xstd = std(dataArray(channel,:));
     
     subplot(4,1,2);
     %plot(timepoints, filtered(channel,:));
-    [ripples,sd, normalizedSquaredSignal] = MyFindRipples(timepoints', filtered(channel,:)', ...
+    [ripples,sd, normalizedSquaredSignal] = MyFindRipples(timepoints',...
+                                 filtered(chan_i,:)', ...
                                  'frequency', fs, ...
-                                 'thresholds', [2 4.0 0.01],...
+                                 'thresholds', [2.5 6.0 0.01],...
                                  'durations', [10 40 350]);
     ripple_starts = [];
     ripple_ends = [];
@@ -78,10 +69,10 @@ for i = 1:numel(channelList)
         ripple_starts = ripples(:,1);
         ripple_ends = ripples(:,3);
     end
-    plotSWR(timepoints(timeIndecies), filtered(channel,timeIndecies), fs, ripple_starts, ripple_ends);
+    plotSWR(timepoints(timeIndecies), filtered(chan_i,timeIndecies), fs, ripple_starts, ripple_ends);
     
     % Spectrogram signal
-    [wt, wfreqs]=cwt(dataArray(channel,:), 'morse', fs, 'ExtendSignal', true, ...
+    [wt, wfreqs]=cwt(dataArray(chan_i,:), 'morse', fs, 'ExtendSignal', true, ...
         'VoicePerOctave', 30, 'WaveletParameters', [3 120]);
     wt_pow = abs(wt).^2;
     low_freqs = find(wfreqs <= 20);
@@ -101,13 +92,13 @@ for i = 1:numel(channelList)
     ax.XAxis.Visible = 'on';
     xlabel('Time (sec)');  
     
-%     figure('Name', ['Pwelch' '-channel-' num2str(channel)]);
-%     [pxx, freqs] = pwelch(dataArray(channel,1:fs*15), ...
+%     figure('Name', ['Pwelch' '-channel-' num2str(chan_i)]);
+%     [pxx, freqs] = pwelch(dataArray(chan_i,1:fs*15), ...
 %                 floor(fs / 4), floor(fs / 8), floor(fs / 2), fs);
 %     plot(freqs, 10*log10(pxx))
 %     
-%     figure('Name', ['CWT' '-channel-' num2str(channel)]);
-%     [wt, wfreqs]=cwt(dataArray(channel,fs*1:fs*15), 'amor', fs);
+%     figure('Name', ['CWT' '-channel-' num2str(chan_i)]);
+%     [wt, wfreqs]=cwt(dataArray(chan_i,fs*1:fs*15), 'amor', fs);
 %     wt_pow = abs(wt).^2;
 %     plot(wfreqs, median(wt_pow, 2))
 end

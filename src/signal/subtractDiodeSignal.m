@@ -1,5 +1,5 @@
 function [data, diodeTable] = subtractDiodeSignal(...
-        dataArray, keepChannels, channelTable)
+        dataArray, channelTable)
 
 data = [];
 matchedChannels = [];
@@ -14,7 +14,8 @@ for gi = 1:max(g)
             strcmp(channelTable.location{loc_group_index(1)}, 'Laser')
         data(matchedDataIndex,:) = dataArray(loc_group_index(1), :);
         channel = channelTable.channel(loc_group_index(1));
-        matchedChannels(end + 1, :) = [channel, channel];
+        channel_index = channelTable.channel_index(loc_group_index(1));
+        matchedChannels(end + 1, :) = [channel, channel, channel_index, channel_index];
         matchedChannelGroup{end + 1} = channelTable.channelGroup{loc_group_index(1)};
         matchedDataIndex = matchedDataIndex + 1;
         continue
@@ -32,10 +33,11 @@ for gi = 1:max(g)
         end
         fst_channel = locChannelTable.channel(ind_comb(i, 1));
         snd_channel = locChannelTable.channel(ind_comb(i, 2));
-        matchedChannels(end + 1, :) = [fst_channel, snd_channel];
         matchedChannelGroup{end + 1} = locChannelTable.channelGroup{1};
-        fst_data_index = find(keepChannels == fst_channel);
-        snd_data_index = find(keepChannels == snd_channel);
+        fst_data_index = locChannelTable.channel_index(ind_comb(i, 1));
+        snd_data_index = locChannelTable.channel_index(ind_comb(i, 2));
+        matchedChannels(end + 1, :) = [fst_channel, snd_channel,...
+            fst_data_index, snd_data_index];
         data(matchedDataIndex, :) = dataArray(fst_data_index, :) -...
                 dataArray(snd_data_index, :);
         matchedDataIndex = matchedDataIndex + 1;
@@ -44,8 +46,9 @@ for gi = 1:max(g)
 end
 
 diodeTable = array2table(matchedChannels, ...
-    'VariableNames', {'channel1', 'channel2'});
+    'VariableNames', {'channel1', 'channel2', 'channel1_index', 'channel2_index'});
 diodeTable.channelGroup = matchedChannelGroup';
+diodeTable.location = channelTable.location(matchedChannels(:,3));
 ndiodes = size(diodeTable, 1);
 diodeTable.channel_name = strcat(diodeTable.channelGroup, ...
     repmat(': ', ndiodes, 1),...
