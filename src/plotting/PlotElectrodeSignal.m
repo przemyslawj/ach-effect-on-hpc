@@ -1,10 +1,14 @@
 path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
 path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
-path = '/mnt/DATA/Prez/y-maze/2019-11-12/signal';
+path = '/mnt/DATA/chat_ripples/baseline/2019-08-09';
+%path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-secondOffset = 0;
+selected_channels_only = 0;
+use_diode = 1;
+
+secondOffset = 2;
 meta = ReadMeta(binName, path);
 %lengthSeconds = min(40, str2double(meta.fileTimeSecs) - secondOffset);
 lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
@@ -12,10 +16,8 @@ lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/Prez/y-maze/channels_reversed_short.csv',...
-    animal_code, meta);
-
-nChans = size(channelTable, 1);
+    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
+    animal_code, meta, selected_channels_only, use_diode);
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 
@@ -24,13 +26,13 @@ fs = meta.nSamp / 10;
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 dataArray = dataArray(channelTable.rec_order,:);
 
-%% Filter LFP
+if use_diode
+    [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
+end
 filtered = applyRippleFilter(dataArray, channelTable, fs);
 
-%TODO calculate on diode signal
-
 %% Plot SWR
-for chan = 1:nChans
+for chan = 1:size(dataArray, 1)
     time=(1:size(filtered,2))/fs;
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...
                                  'frequency', fs, ...

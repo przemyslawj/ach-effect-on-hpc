@@ -1,14 +1,33 @@
-function [channelTable] = readChannelTable(channels_csv, animal_code, meta)
+function [channelTable] = readChannelTable(channels_csv, animal_code, ...
+    meta, selected_channels_only, use_diode)
 %READCHANNELTABLE Returns table with channels and their description
+
+if nargin < 4
+    selected_channels_only = 0;
+    use_diode = 0;
+end
+
 
 channelTable = findOmneticChannels(...
     channels_csv,...
     animal_code);
 keepChannels = intersect(meta.snsSaveChanSubset, channelTable.channel, 'sorted');
 if isempty(keepChannels)
-    keepChannels = (0:nChans)';
+    keepChannels = (0:size(channelTable,1))';
 end
+
 channelTable = channelTable(ismember(channelTable.channel, keepChannels), :);
 channelTable.rec_order = (find(ismember(meta.snsSaveChanSubset, keepChannels)))';
+
+if selected_channels_only
+    if use_diode
+        selected_col = find(channelTable.is_pair_selected == 1);
+    else
+        selected_col = find(channelTable.is_channel_selected == 1);
+    end
+    channelTable = channelTable(selected_col,:);
+end
+channelTable.channel_index = (1:size(channelTable, 1))';
+
 end
 

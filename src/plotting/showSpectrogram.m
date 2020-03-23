@@ -1,10 +1,13 @@
-datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
-datarootdir = '/mnt/DATA/Prez/y-maze/2019-11-12/signal';
+%datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
+%datarootdir = '/mnt/DATA/chat_ripples/y-maze/2019-11-12';
+datarootdir = '/mnt/DATA/chat_ripples/sleep/2019-12-03';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
 subplots = 1;
+selected_channels_only = 1;
+use_diode = 1;
 
 meta = ReadMeta(binName, path);
 
@@ -14,14 +17,12 @@ binNameParts = strsplit(binName, '_g0');
 expname = binNameParts{1};
 
 secondOffset = 4;
-lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 60);
-
-nChans = meta.nChans;
+lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 40);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/Prez/y-maze/channels_reversed_short.csv',...
-    animal_code, meta);
+    '/mnt/DATA/chat_ripples/y-maze/channels_reversed_short.csv',...
+    animal_code, meta, selected_channels_only, use_diode);
 fs = 600;
 time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
 if ~isempty(time_mouse_arrived)
@@ -33,6 +34,9 @@ dataArray = dataArray(channelTable.rec_order,:);
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 %dataArray = filter50Hz(dataArray, fs);
 
+if use_diode
+    [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
+end
 %% Filter LFP for ripples
 filtered = applyRippleFilter(dataArray, channelTable, fs);
 
@@ -54,7 +58,7 @@ for chan_i = 1:size(channelTable, 1)
     subplot(4,1,1);
     timepoints = (1:size(dataArray,2)) / fs;
     plot(timepoints(timeIndecies), dataArray(chan_i,timeIndecies));
-    xstd = std(dataArray(channel,:));
+    xstd = std(dataArray(chan_i,:));
     
     subplot(4,1,2);
     %plot(timepoints, filtered(channel,:));

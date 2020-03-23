@@ -9,7 +9,7 @@ if isfile(channelsFilepath)
                                        channelTable.side, ...
                                        num2str(channelTable.pair));
 else
-    disp(['File not found for channels at ' channelsFilepath]);
+    warning(['File not found for channels at ' channelsFilepath]);
     channelTable = table();
 end
 

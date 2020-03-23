@@ -1,20 +1,20 @@
 path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
 %path = '/mnt/DATA/Clara/diode_baseline/20190906/BD031ActiveStimON1_g0';
-path = '/mnt/DATA/Prez/y-maze/2019-11-12/signal';
+path = '/mnt/DATA/chat_ripples/baseline/2019-08-09/signal';
 %path = '/mnt/DATA/Prez/sleep/2019-11-07/signal';
 
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-showFiltered = 1;
-showDiode = 1;
+showFiltered = 0;
+showDiode = 0;
 
 secondOffset = 0;
 meta = ReadMeta(binName, path);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/Prez/y-maze/channels_reversed_short.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
     animal_code, meta);
 
 lengthSeconds = min(120, str2double(meta.fileTimeSecs) - secondOffset);
@@ -45,9 +45,6 @@ if ~isempty(channelTable.location)
 end
 shift = 5 * median(std(dataArray, [], 2));
 showTraces(dataArray, fs, binName, channelTable, shift);
-%% Diode signal
-[diodeData, diodeTable] = subtractDiodeSignal(dataArray, channelTable);
-showTraces(diodeData, fs, binName, diodeTable, shift);
 
 %% Filter LFP
 filtered = applyRippleFilter(dataArray, channelTable, fs);
@@ -59,6 +56,10 @@ end
 
 %% Diode signal
 if showDiode
+    [diodeData, diodeTable] = subtractDiodeSignal(dataArray, channelTable);
+    showTraces(diodeData, fs, binName, diodeTable, shift);
+end
+if showDiode & showFiltered
     diodeFiltered = applyRippleFilter(diodeData, diodeTable, fs);
     showTraces(diodeFiltered, fs, binName, diodeTable, shift);
 end
