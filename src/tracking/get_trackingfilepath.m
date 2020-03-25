@@ -1,6 +1,6 @@
-function [filepath] = get_trackingfilepath(datarootdir, binName)
-trackingdir = [datarootdir filesep 'movie' filesep 'tracking'];
-dirparts = strsplit(datarootdir, filesep);
+function [filepath] = get_trackingfilepath(dateddir, binName)
+trackingdir = [dateddir filesep 'movie' filesep 'tracking'];
+dirparts = strsplit(dateddir, filesep);
 dirparts(cellfun('isempty',dirparts)) = [];
 datestr = dirparts{numel(dirparts)};
 filename_parts = strsplit(binName, '_');

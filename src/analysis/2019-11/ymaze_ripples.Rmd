@@ -1,0 +1,86 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r read_data}
+channel.loc = 'CA1'
+diode.signal = TRUE
+
+data_dir = '/mnt/DATA/chat_ripples/y-maze/'
+
+if (diode.signal) {
+  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
+  #psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_after_th6.csv'))
+} else {
+  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th5_indiv_excl.csv'))
+}
+psddf.ymaze$animal = as.factor(psddf.ymaze$animal)
+psddf.ymaze$channel = as.factor(psddf.ymaze$channel)
+psddf.ymaze$laserOn = as.factor(psddf.ymaze$laserOn)
+
+psddf.ymaze = psddf.ymaze %>%
+  dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_')) %>%
+  filter(channelLocation == channel.loc) %>%
+  filter(stage_desc == 'DuringStim') 
+
+psddf.ymaze$trial_id = as.factor(psddf.ymaze$trial_id)
+```
+
+Join trial metadata (includes if the mouse made correct choice)
+```{r}
+trial.info.df = read_csv(paste(data_dir, 'trials.csv', sep='/')) %>%
+  dplyr::mutate(file_name=paste0('signal/', animal, '_trial_', trial, '_g0'))
+trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
+glimpse(trial.info.df)
+```
+
+```{r}
+library(stringr)
+#trial.info.df = dplyr::mutate(trial.info.df, file_name = stringr::str_replace(file_name, '_trial_', '_after_'))
+psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+                        by=c('date', 'animal', 'file_name'))
+```
+
+
+SWR incidence when laser off
+TODO: should only consider correct trials
+```{r}
+swr.ymaze.summary = psddf.ymaze %>%
+  filter(correct == 1) %>%
+  group_by(animal, date, laserOn) %>% 
+  dplyr::summarise(mean.swr_incidence=mean(swr_incidence),
+                   has_ripples.pct=sum(swr_incidence > 0) / n(),
+                   mean.nripples = mean(nripples)) 
+swr.ymaze.summary$date = as.factor(swr.ymaze.summary$date)
+
+swr.ymaze.summary %>%
+  dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
+                date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
+  ggplot() +
+    geom_point(aes(x=date_laser_val, y=mean.swr_incidence, color=animal)) +
+    geom_line(aes(x=date_laser_val, y=mean.swr_incidence, group=date_animal)) +
+    xlab('Learning day') + ylab('SWR incidence at goal (Hz)')
+  
+```
+
+```{r}
+swr.ymaze.summary %>% DT::datatable()
+
+filter(psddf.ymaze, correct == 1) %>%
+  dplyr::select(date, animal, trial, laserOn, swr_incidence, nripples) %>%
+  DT::datatable()
+```
+
+Total ripples:
+
+
+TODO: 
+[] look at the found ripples - are they good quality? are they long enough?
+[] When do ripples happen: before vs at the end
+[x] look at all channels
+
+Problems:
+[x] exclude SWRs during movement as detected from EMG
+[] same SWR thresholds should apply for laser and no-laser trials
+

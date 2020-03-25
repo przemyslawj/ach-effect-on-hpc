@@ -59,10 +59,11 @@ mobile.col = '#35b779ff'
 
 
 ```{r include=FALSE}
-channel.loc = 'CA1'
-diode.signal = TRUE
+channel.loc = 'CA3'
+diode.signal = FALSE
 
-data_dir = '/mnt/DATA/chat_ripples/baseline/'
+data_dir =  '/mnt/DATA/chat_ripples/baseline'
+
 if (diode.signal) {
   psddf = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
 } else {
@@ -78,6 +79,7 @@ psddf = psddf %>%
   dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_')) %>%
   filter(channelLocation == channel.loc) %>%
   filter(state != 'xx')
+
 psddf$trial_id = as.factor(psddf$trial_id)
 ```
 
@@ -95,7 +97,7 @@ ripple.df = ripple.df %>%
   filter(channelLocation == channel.loc) %>%
   #filter(state == 'Immobile')
   filter(state != 'xx')
-  
+
 ripple.df$animal = as.factor(ripple.df$animal)
 ripple.df$channel = as.factor(ripple.df$channel)
 ripple.df$laserOn = as.factor(ripple.df$laserOn)
@@ -796,12 +798,13 @@ sem(ripple_freqs)
 ```{r}
 subset.ripple.df = filter(best.ripple.df, !is.na(peak_freq))
 
-m.full = lmerTest::lmer(ripple_dur ~ laserOn * state + (1 + laserOn + state | animal), 
-                         data=subset.ripple.df, REML = TRUE) 
-#m.full = lmerTest::lmer(pow_theta ~ laserOn  + (1 + laserOn | animal), data=df, REML = TRUE) 
+#m.full = lmerTest::lmer(ripple_dur ~ laserOn * state + (1 + laserOn + state | animal), 
+#                         data=subset.ripple.df, REML = TRUE) 
+#plot.model.diagnostics(m.full, subset.ripple.df$animal, subset.ripple.df$state)
+m.full = lmerTest::lmer(swr_incidence ~ laserOn * state  + (1 + laserOn + state| animal), data=best.psddf, REML = TRUE) 
 #m.nolaser = lmerTest::lmer(swr_incidence ~ state + (1 + state | animal), data=psddf.starts, REML = TRUE) 
+plot.model.diagnostics(m.full, best.psddf$animal, best.psddf$state)
 summary(m.full)
-plot.model.diagnostics(m.full, subset.ripple.df$animal, subset.ripple.df$state)
 coef(m.full)$animal
 #change.mean = X[,2] / X[,1]
 anova(m.full, refit=FALSE, ddf='Satterthwaite')
@@ -967,7 +970,7 @@ paired.state$state_laser = as.factor(paired.state$state_laser)
 ```
 
 ```{r include=TRUE}
-xlabels = rep(c('0 - 20 sec', '20 - 40 sec'), 2)
+xlabels = rep(c('-20 - 0 sec', '0 - 20 sec'), 2)
 my_comparisons <- list( c("0", "1"))
 paired.state %>%
   ggplot(aes(x=laserOn, y=swr_incidence, group=laserOn)) +
@@ -999,7 +1002,7 @@ ggplot2::ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_comparison.pdf'),
 
 Experimental plot of decrease in ripples
 ```{r include=TRUE}
-xlabels = rep(c('0 - 20 s', '20 - 40 s'), 2)
+xlabels = rep(c('-20 - 0 s', '0 - 20 s'), 2)
 my_comparisons <- list( c("0", "1"))
 
 paired.animal.summary = paired.state %>%

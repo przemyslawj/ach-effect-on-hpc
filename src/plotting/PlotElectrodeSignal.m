@@ -1,14 +1,13 @@
 path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
 path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
-path = '/mnt/DATA/chat_ripples/baseline/2019-08-09';
-%path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
+path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-selected_channels_only = 0;
+selected_channels_only = 1;
 use_diode = 1;
 
-secondOffset = 2;
+secondOffset = 3;
 meta = ReadMeta(binName, path);
 %lengthSeconds = min(40, str2double(meta.fileTimeSecs) - secondOffset);
 lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
@@ -30,14 +29,19 @@ if use_diode
     [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
 end
 filtered = applyRippleFilter(dataArray, channelTable, fs);
-
+emgIdx = find(strcmp(channelTable.location, 'EMG'));
+keep_sample_fewer = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 1);
 %% Plot SWR
 for chan = 1:size(dataArray, 1)
     time=(1:size(filtered,2))/fs;
+    
+    ripple_detection_signal = GetRippleSignal(filtered(chan, :)', fs);
+    std_estimate = std(ripple_detection_signal(keep_sample_fewer));
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...
                                  'frequency', fs, ...
-                                 'thresholds', [2.5 6 0.01],...
-                                 'durations', [10 40 350]);
+                                 'thresholds', [2 6 0.01],...
+                                 'durations', [10 20 300],...
+                                 'std', std_estimate);
     if ~isempty(ripples)                               
         ripple_starts = ripples(:,1);
         ripple_ends = ripples(:,3);

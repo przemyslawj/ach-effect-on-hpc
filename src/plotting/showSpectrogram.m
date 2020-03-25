@@ -1,13 +1,13 @@
 %datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
-%datarootdir = '/mnt/DATA/chat_ripples/y-maze/2019-11-12';
-datarootdir = '/mnt/DATA/chat_ripples/sleep/2019-12-03';
+datarootdir = '/mnt/DATA/chat_ripples/y-maze/2019-11-11';
+%datarootdir = '/mnt/DATA/chat_ripples/sleep/2019-12-03';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
 subplots = 1;
-selected_channels_only = 1;
-use_diode = 1;
+selected_channels_only = 0;
+use_diode = 0;
 
 meta = ReadMeta(binName, path);
 
@@ -21,7 +21,7 @@ lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 40);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/y-maze/channels_reversed_short.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
     animal_code, meta, selected_channels_only, use_diode);
 fs = 600;
 time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);

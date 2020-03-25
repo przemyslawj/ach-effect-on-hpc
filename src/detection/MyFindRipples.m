@@ -111,15 +111,9 @@ for i = 1:2:length(varargin)
 end
 
 % Parameters
-windowLength = round(frequency/11);
-windowLength = round(frequency/23);
-% make window of odd length
-windowLength = floor(windowLength / 2) * 2 + 1; 
 
-squaredSignal = signal.^2;
-window = ones(windowLength,1)/windowLength;
-
-[normalizedSquaredSignal,sd] = unity2(Filter0(window, squaredSignal), stdEstimate);
+ripple_detection_signal = GetRippleSignal(signal, frequency);
+[normalizedSquaredSignal,sd] = zscore(ripple_detection_signal, stdEstimate);
 
 % Detect ripple periods by thresholding normalized squared signal
 thresholded = normalizedSquaredSignal > lowThresholdFactor;
@@ -242,33 +236,14 @@ if strcmp(show,'on')
 		end
     end
 end
-%disp(['Found: ' num2str(length(secondPass)) ' ripple events.']);
 
-function y = Filter0(b,x)
-% Moving average filter calculated with kernel b
-    if mod(length(b),2) ~= 1
-        error('kernel length should be odd');
-    end
-
-    shift = (length(b)-1)/2;
-
-    [y0 z] = filter(b,1,x);
-
-    y = [y0(shift+1:end,:) ; z(1:shift,:)];
-end
-
-function [U,stdA] = unity(A)
-	meanA = mean(A);
-	stdA = std(A);
-    U = (A - meanA)/stdA;
-end
 
 function [stdEstimate] = getStdEstimate(A)
     %stdEstimate = median(A) / 0.6745;
     stdEstimate = std(A);
 end
 
-function [U, stdEstimate] = unity2(A, stdEstimate)
+function [U, stdEstimate] = zscore(A, stdEstimate)
     if stdEstimate == 0
         stdEstimate = getStdEstimate(A);
     end

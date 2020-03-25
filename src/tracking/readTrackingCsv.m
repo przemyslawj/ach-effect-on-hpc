@@ -6,19 +6,20 @@ end
 
 time_mouse_arrived = table();
 if ~exist(filepath, 'file')
-    fprintf('Metadata file %s not found\n', filepath)
+    warning('Tracking file %s not found\n', filepath)
     return
 end
     
-tracking_dat = readtable(filepath, 'ReadVariableNames', true);
+tracking_dat = readtable(filepath, 'ReadVariableNames', true, ...
+    'PreserveVariableNames', true);
 
 % filter invalid pos
 tracking_dat_filtered = tracking_dat(tracking_dat.x >= 0,:);
 movie_fs = 15;
 tracking_dat_filtered.time_sec = tracking_dat_filtered.frame / movie_fs - secondOffset;
 
-reward_percent = round(max(tracking_dat_filtered.total_percent) - 5);
-key_positions_percent = [0 45 90 120 165 reward_percent];
+reward_percent = round(max(tracking_dat_filtered.total_percent) - 10);
+key_positions_percent = [0 45 90 120 150 reward_percent];
 
 key_positions_sec = zeros(size(key_positions_percent));
 for i = 1:numel(key_positions_percent)
