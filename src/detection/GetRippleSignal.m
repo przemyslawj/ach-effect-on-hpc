@@ -1,7 +1,7 @@
 function [ripple_detection_signal] = GetRippleSignal(filtered, frequency)
 %windowLength = round(frequency/23);
-% Window length adjusted on frequency 1025 Hz
-windowLength = frequency/1025 * 11;
+% Window length of 10.4 ms
+windowLength = frequency/1025 * 13;
 % make window of odd length
 windowLength = floor(windowLength / 2) * 2 + 1; 
 

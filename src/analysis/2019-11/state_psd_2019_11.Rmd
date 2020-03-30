@@ -806,7 +806,6 @@ m.full = lmerTest::lmer(swr_incidence ~ laserOn * state  + (1 + laserOn + state|
 plot.model.diagnostics(m.full, best.psddf$animal, best.psddf$state)
 summary(m.full)
 coef(m.full)$animal
-#change.mean = X[,2] / X[,1]
 anova(m.full, refit=FALSE, ddf='Satterthwaite')
 ```
 
@@ -1000,10 +999,9 @@ ggplot2::ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_comparison.pdf'),
                 width=11, height=8.5, units='cm', dpi=300, device=cairo_pdf)
 ```
 
-Experimental plot of decrease in ripples
+Decrease in ripples per animal
 ```{r include=TRUE}
 xlabels = rep(c('-20 - 0 s', '0 - 20 s'), 2)
-my_comparisons <- list( c("0", "1"))
 
 paired.animal.summary = paired.state %>%
   group_by(animal, state, laserOn, paired_group, paired_group_num, state_laser) %>%
@@ -1011,14 +1009,6 @@ paired.animal.summary = paired.state %>%
                    swr_incidence.sem = sem(swr_incidence))
 paired.animal.summary %>%
   ggplot() +
-  #stat_summary(aes(colour=laserOn), fun.y='mean', geom='col', fill='white') +
-  #stat_summary(fun.data='mean_sd', geom='errorbar', width=0.3) +
-  #geom_boxplot(aes(group=state_laser_num, colour=state), notch=FALSE) +
-  #geom_violin(aes(group=state_laser_num, colour=state), adjust=2,
-  #            draw_quantiles = c(0.5)) +
-  #geom_jitter(data=paired.state, aes(x=laserOn, y=swr_incidence), width=0.1) +
-  #geom_dotplot(aes(fill=animal), binaxis = "y", stackdir = "center", 
-  #             binwidth = 0.01, dotsize=0.8, stackratio=0.8) +
   geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal, color=state), 
             size=0.6, alpha=1, linetype=1) +
   geom_ribbon(aes(x=laserOn, 
@@ -1041,6 +1031,7 @@ ggplot2::ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_comparison.pdf'),
 ```
 
 ```{r}
+my_comparisons <- list( c("0", "1"))
 ggpaired(paired.state, x='laserOn', y='swr_incidence', facet.by='state', color='laserOn', 
          line.color = 'grey', line.size = 0.2, add='jitter') +
   stat_compare_means(aes(label = paste0("p=", ..p.format..)), 

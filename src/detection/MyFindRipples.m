@@ -244,7 +244,7 @@ function [stdEstimate] = getStdEstimate(A)
 end
 
 function [U, stdEstimate] = zscore(A, stdEstimate)
-    if stdEstimate == 0
+    if stdEstimate == 0 || isempty(stdEstimate)
         stdEstimate = getStdEstimate(A);
     end
     U = (A - mean(A)) / stdEstimate;

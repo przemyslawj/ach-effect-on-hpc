@@ -6,7 +6,7 @@ path = [datarootdir filesep 'signal'];
 fprintf('Processing file: %s\n', binName);
 
 subplots = 1;
-selected_channels_only = 0;
+selected_channels_only = 1;
 use_diode = 0;
 
 meta = ReadMeta(binName, path);
@@ -16,7 +16,7 @@ tracking_filepath = get_trackingfilepath(datarootdir, binName);
 binNameParts = strsplit(binName, '_g0');
 expname = binNameParts{1};
 
-secondOffset = 4;
+secondOffset = 3;
 lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 40);
 
 animal_code = binName(1:2);
@@ -80,7 +80,7 @@ for chan_i = 1:size(channelTable, 1)
         'VoicePerOctave', 30, 'WaveletParameters', [3 120]);
     wt_pow = abs(wt).^2;
     low_freqs = find(wfreqs <= 20);
-    high_freqs = find(wfreqs < 200);    
+    high_freqs = find(wfreqs < 200 & wfreqs > 20);
     
     if subplots == 0
         figure;

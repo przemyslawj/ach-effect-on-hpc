@@ -20,21 +20,20 @@ channelTable = readChannelTable(...
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
 
-fs = meta.nSamp / 10;
+fs = 1250;
 %dataArray = filter50Hz(dataArray, fs);
 dataArray = downsample(dataArray', round(meta.nSamp / fs))';
 dataArray = dataArray(channelTable.rec_order,:);
-
+time = (1:size(dataArray,2)) / fs;
 if use_diode
     [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
 end
 filtered = applyRippleFilter(dataArray, channelTable, fs);
 emgIdx = find(strcmp(channelTable.location, 'EMG'));
+
 keep_sample_fewer = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 1);
 %% Plot SWR
-for chan = 1:size(dataArray, 1)
-    time=(1:size(filtered,2))/fs;
-    
+for chan = 1:size(dataArray, 1)  
     ripple_detection_signal = GetRippleSignal(filtered(chan, :)', fs);
     std_estimate = std(ripple_detection_signal(keep_sample_fewer));
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...

@@ -2,30 +2,46 @@
 title: "R Notebook"
 output: html_notebook
 ---
+```{r}
+library(purrr)
+```
+
 
 ```{r read_data}
-channel.loc = 'CA1'
+#channel.loc = 'CA3'
 diode.signal = TRUE
 
 data_dir = '/mnt/DATA/chat_ripples/y-maze/'
 
 if (diode.signal) {
+  #psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_single_std_th6.csv'))
   psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
-  #psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_after_th6.csv'))
+  ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_diode_th6.csv'))
 } else {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th5_indiv_excl.csv'))
+  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th5.csv'))
+  ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_th6.csv'))
 }
-psddf.ymaze$animal = as.factor(psddf.ymaze$animal)
-psddf.ymaze$channel = as.factor(psddf.ymaze$channel)
-psddf.ymaze$laserOn = as.factor(psddf.ymaze$laserOn)
 
-psddf.ymaze = psddf.ymaze %>%
-  dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_')) %>%
-  filter(channelLocation == channel.loc) %>%
-  filter(stage_desc == 'DuringStim') 
+prepare.ymaze.df = function(df) {
+  df$animal = as.factor(df$animal)
+  df$channel = as.factor(df$channel)
+  df$laserOn = as.factor(df$laserOn)
+  
+  df = df %>%
+    dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
+  
+  df$trial_id = as.factor(df$trial_id)
+  df = df %>%
+    dplyr::group_by(date, animal) %>%
+    dplyr::mutate(trial_no = map_dbl(strsplit(file_name, '_'), ~ as.numeric(.x[3])) ) 
+  
+  return(df)
+}
 
-psddf.ymaze$trial_id = as.factor(psddf.ymaze$trial_id)
+psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
+ripples.ymaze = prepare.ymaze.df(ripples.ymaze)
 ```
+
 
 Join trial metadata (includes if the mouse made correct choice)
 ```{r}
@@ -40,47 +56,143 @@ library(stringr)
 #trial.info.df = dplyr::mutate(trial.info.df, file_name = stringr::str_replace(file_name, '_trial_', '_after_'))
 psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
                         by=c('date', 'animal', 'file_name'))
+ripples.ymaze = left_join(ripples.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+                        by=c('date', 'animal', 'file_name'))
 ```
 
-
-SWR incidence when laser off
-TODO: should only consider correct trials
+Performance reached 70 % 
 ```{r}
-swr.ymaze.summary = psddf.ymaze %>%
-  filter(correct == 1) %>%
-  group_by(animal, date, laserOn) %>% 
-  dplyr::summarise(mean.swr_incidence=mean(swr_incidence),
-                   has_ripples.pct=sum(swr_incidence > 0) / n(),
-                   mean.nripples = mean(nripples)) 
-swr.ymaze.summary$date = as.factor(swr.ymaze.summary$date)
+ psddf.ymaze %>%
+  group_by(animal, learning_day) %>%
+  dplyr::summarise(pct.correct=mean(correct)) %>% 
+  group_by(learning_day) %>%
+  dplyr::summarise(mean(pct.correct),
+                   sem(pct.correct))
+```
 
-swr.ymaze.summary %>%
-  dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
-                date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
+```{r}
+psddf.ymaze.correct = filter(psddf.ymaze, correct == 1)
+```
+
+Filter animals with fewer ripples than one
+```{r}
+nripples.summary = psddf.ymaze.correct %>%
+  filter(laserOn == 0, learning_day >= 1, stage_desc == 'Total', channelLocation == 'CA1') %>%
+  group_by(animal) %>%
+  dplyr::summarise(has_ripples.pct=sum(swr_incidence > 0) / n(),
+                   nripples.mean = mean(nripples)) 
+psddf.ymaze.correct = filter(psddf.ymaze.correct, 
+                             animal %in% subset(nripples.summary, nripples.mean >= 1)$animal)
+```
+
+Plot ripples over trial
+```{r}
+ripples.ymaze %>% 
+  filter(correct == 1) %>% 
+  filter(learning_day == 6, animal=='PT') %>%
+  filter(stage_desc %in% c('StartZone', 'DuringStim')) %>%
   ggplot() +
-    geom_point(aes(x=date_laser_val, y=mean.swr_incidence, color=animal)) +
-    geom_line(aes(x=date_laser_val, y=mean.swr_incidence, group=date_animal)) +
-    xlab('Learning day') + ylab('SWR incidence at goal (Hz)')
+  geom_point(aes(x=peak_t, y=trial_no, color=laserOn)) +
+  facet_grid(channelLocation ~ stage_desc, scales = 'free_x') +
+  xlab('Time (s)') + ylab('# trial')
+  
   
 ```
 
-```{r}
-swr.ymaze.summary %>% DT::datatable()
 
-filter(psddf.ymaze, correct == 1) %>%
+```{r}
+swr.ymaze.summary = psddf.ymaze.correct %>%
+  group_by(animal, date, learning_day, laserOn, stage_desc, channelLocation) %>% 
+  dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
+                   swr_incidence.sem=sem(swr_incidence),
+                   has_ripples.pct=sum(swr_incidence > 0) / n(),
+                   nripples.mean = mean(nripples)) 
+swr.ymaze.summary$date = as.factor(swr.ymaze.summary$date)
+```
+
+```{r}
+swr.ymaze.summary %>%
+  filter(stage_desc == 'DuringStim', learning_day >= 5)  %>%
+  dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
+                date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
+  ggplot() +
+  geom_point(aes(x=date_laser_val, y=swr_incidence.mean, color=animal)) +
+  geom_line(aes(x=date_laser_val, y=swr_incidence.mean, group=date_animal)) +
+  geom_ribbon(aes(x=date_laser_val, 
+                  ymin=swr_incidence.mean - swr_incidence.sem, 
+                  ymax=swr_incidence.mean + swr_incidence.sem,
+                  group=date_animal), 
+                alpha=0.1) +
+  xlab('Learning day') + ylab('Ripple incidence at goal (Hz)') +
+  facet_grid(. ~ channelLocation) +
+  gtheme
+```
+
+```{r}
+swr.ymaze.summary %>% 
+  filter(stage_desc == 'DuringStim')  %>%
+  DT::datatable()
+
+psddf.ymaze.correct %>%
+  filter(stage_desc == 'DuringStim')  %>%
   dplyr::select(date, animal, trial, laserOn, swr_incidence, nripples) %>%
   DT::datatable()
 ```
+Significance testing
+```{r}
+last2days.ymaze.correct = filter(psddf.ymaze.correct, 
+                                 learning_day >= 5,
+                                 channelLocation == 'CA1',
+                                 stage_desc == 'DuringStim')
+m.full = lmerTest::lmer(swr_incidence ~ laserOn + (1 + laserOn | animal), 
+                        data=last2days.ymaze.correct, 
+                        REML = TRUE) 
+plot.model.diagnostics(m.full, last2days.ymaze.correct$animal, last2days.ymaze.correct$laserOn) 
+summary(m.full)
+coef(m.full)$animal
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+```
 
-Total ripples:
+
+
+When do ripples happen: pct of runs with ripples during the stage
+```{r}
+swr.ymaze.summary %>% 
+#psddf.ymaze.correct %>%
+  filter(laserOn == 0, learning_day == 6) %>%
+  filter(stage_desc %in% c('DuringStim', 'StartZone', 'FirstArm', 'BeforeGoalZone')) %>%
+  ggplot() +
+  facet_grid(date ~ .) +
+  geom_point(aes(x=stage_desc, y=has_ripples.pct, color=stage_desc))
+
+```
+
+Ripples during a single trial
+```{r}
+psddf.ymaze.correct %>% 
+  filter(learning_day == 6) %>%
+  filter(laserOn == 0) %>%
+  filter(stage_desc %in% c('StartZone', 'DuringStim')) %>% 
+  dplyr::mutate(date_trial = paste(animal, format(date), file_name, sep='_')) %>%
+  dplyr::select(animal, date, date_trial, stage_desc, nripples, swr_incidence, correct, channelLocation) %>%  
+  ggplot(aes(x=stage_desc, y=nripples, group=date_trial, color=animal)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(correct ~ channelLocation)
+```
 
 
 TODO: 
-[] look at the found ripples - are they good quality? are they long enough?
-[] When do ripples happen: before vs at the end
+[] Replicate figure: https://www.nature.com/articles/s41593-017-0061-5/figures/3
+   - location of SWRs: x - time, y- # trial, point for ripple
+   - Spectrogram on ymaze? avg for a day
+[] Ripples correlation with success??
+[] 20-50Hz oscillations at reward for CA3
+[x] look at ymaze % correct to justify choice of learning day 5 and 6 for ripples comparioson
+[x] look at the found ripples - are they good quality? are they long enough?
 [x] look at all channels
+[] coherence between CA1 and CA3
 
 Problems:
 [x] exclude SWRs during movement as detected from EMG
-[] same SWR thresholds should apply for laser and no-laser trials
 

@@ -5,18 +5,18 @@
 
 %% setup results
 ripple_std_thr = 6;
-use_diode = 1;
+use_diode = 0;
 selected_channels_only = 1;
 datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 is_ymaze_trial = 1;
 is_after_ymaze = 0;
-secondOffset = 3;
+secondOffset = 2;
 %datarootdir = '/mnt/DATA/chat_ripples/baseline';
 %is_urethane_trial = 0;
 %is_ymaze_trial = 0;
 %secondOffset = 0;
 
-trials_fpath = [datarootdir filesep 'after_trials.csv'];
+trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
 reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
@@ -57,9 +57,8 @@ for i = 1:nexp
     dataArray = dataArray(channelTable.rec_order,:);
 
     fs = 1250;
-    time = (1:size(dataArray,2)) / fs;
-    dataArrayOrg = dataArray;
     dataArray = downsample(dataArray', round(meta.nSamp / fs))';
+    time = (1:size(dataArray,2)) / fs;
     if use_diode
         [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
     end
@@ -126,20 +125,25 @@ for i = 1:nexp
                 strcmp(channelTable.location{channel}, 'EMG')
             continue
         end
+        ripple_detection_signal = GetRippleSignal(filtered(channel, :)', fs);
 %         std_estimate_index = find(...
 %             strcmp(std_estimates.animal, animal_code) & ...
 %             std_estimates.date == expstable.date(i) & ...
-%             strcmp(std_estimates.channel_name, channelTable.channel_name{channel}));
+%             strcmp(strrep(std_estimates.channel_name, ' ', ''), ...
+%                    strrep(channelTable.channel_name{channel}, ' ', '')));
         
-        ripple_detection_signal = GetRippleSignal(filtered(channel, :)', fs);
+        % remove epochs with jumps in the signal
+        channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.5);
+        keep_sample = intersect(channel_keep_sample, keep_sample);
+        %std_estimate = std_estimates.std_estimate(std_estimate_index);
+        %std_estimate = median(ripple_detection_signal(keep_sample_fewer) / 0.6745);
         std_estimate = std(ripple_detection_signal(keep_sample_fewer));
-        
+        fprintf('Using std estimate %.8f\n', std_estimate);
         [ripples, sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(channel,:)', ...
                      'frequency', fs, ...
                      'thresholds', [2 ripple_std_thr 0.01],...
                      'durations', [10 20 300],...
                      'std', std_estimate);
-                     %'std', std_estimates.std_estimate(std_estimate_index));
         if ~isempty(ripples)
             keep_ripples = ismember(int32(ripples(:,2) * fs), keep_sample);
             if ~all(keep_ripples)
@@ -215,6 +219,8 @@ for i = 1:nexp
                 result_table.ripple_dur(entry_i) = mean(section_ripples(:,3) - section_ripples(:,1));
                 result_table.ripple_freq(entry_i) = mean(section_ripples(:,5));
                
+                % Align ripple timings to the start of the trial
+                section_ripples(:, 1:3) = section_ripples(:, 1:3) - sec_start;
                 ripples_table = array2table(section_ripples);
                 ripples_table.Properties.VariableNames = {'start_sec', 'peak_t', 'end_time', 'peakpow', 'peak_freq'};
                 ripples_table.date = repmat(dateddir, nripples, 1);
@@ -222,6 +228,7 @@ for i = 1:nexp
                 ripples_table.file_name = repmat(expstable.dirname(i), nripples, 1);
                 ripples_table.trial = repmat({trial}, nripples, 1);
                 ripples_table.stage_desc = repmat({trialPeriods.stage_desc{trial_period_i}}, nripples, 1);
+                ripples_table.stage_dur_sec = repmat(sec_length, nripples, 1);
                 ripples_table.channel = repmat(channelTable.channel(channel), nripples, 1);
                 ripples_table.channelLocation = repmat(channelTable.location(channel), nripples, 1);
                 ripples_table.channelName = repmat(channelTable.channel_name(channel), nripples, 1);
@@ -251,6 +258,8 @@ end
 if ~selected_channels_only
     filename_infix = [filename_infix '_all'];
 end
+
+%filename_infix = [filename_infix '_single_std'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
 writetable(result_table, [datarootdir filesep 'psd_table' outfile_suffix]);
 writetable(all_ripples, [datarootdir filesep 'ripples' outfile_suffix]);

@@ -58,7 +58,9 @@ for gi = 1:max(g)
         end
 
         ripple_detection_signal = ripple_detection_signal(:, keep_sample);
-        trial_std(i, :) = (median(ripple_detection_signal, 2) / 0.6745)';
+        std_estimate = std(ripple_detection_signal, [], 2)';
+        %std_estimate = (median(ripple_detection_signal, 2) / 0.6745)';
+        trial_std(i, :) = std_estimate;
         signal_concat = [signal_concat ripple_detection_signal];
     end
     
