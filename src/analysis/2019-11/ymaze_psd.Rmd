@@ -1,0 +1,63 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
+psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
+psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+                        by=c('date', 'animal', 'file_name'))
+```
+
+```{r}
+bands = c(exp(seq(0.7, 5.30, by=0.05)))
+psd.molten = 
+  filter(psddf.ymaze, correct==1) %>%
+  select(animal, date, learning_day, trial_id, channelLocation, laserOn, stage_desc, dirname, starts_with('all_psd_xx')) %>%
+  reshape2::melt(id.vars=c('animal', 'date', 'learning_day', 'trial_id', 'channelLocation','laserOn', 'stage_desc', 'dirname'), variable.name='band_name', value.name='band_power')  %>%
+  dplyr::mutate(band_start_freq = bands[as.numeric(stringr::str_replace(band_name, 'all_psd_xx_', ''))])
+
+
+psd.day.mean = psd.molten %>%
+  dplyr::group_by(animal, date, stage_desc, learning_day, channelLocation, laserOn, band_name) %>%
+  dplyr::summarise(mean.power = mean(band_power),
+                   sem.power=sem(band_power)) %>%
+  dplyr::mutate(band_start_freq = bands[as.numeric(stringr::str_replace(band_name, 'all_psd_xx_', ''))])
+```
+
+```{r}
+psd.day.mean %>%
+  filter(animal == 'BS') %>%
+  filter(laserOn==0) %>%
+  filter(learning_day == 6) %>% 
+  filter(stage_desc %in% c(
+    #'StartZone', 
+    'MazeStem',
+    'GoalZone20sec')) %>%
+    #'StimLast10sec')) %>%
+  ggplot(aes(x=band_start_freq, group=stage_desc, color=stage_desc)) +
+  geom_line(aes(y=mean.power)) +
+  ggplot2::coord_flip() +
+  facet_grid(. ~ channelLocation, scales='free') +
+  gtheme 
+```
+TODO: translate to zscore
+```{r}
+psd.molten %>%
+  #filter(animal == 'BS') %>%
+  filter(laserOn==0) %>%
+  filter(learning_day == 6) %>% 
+  filter(stage_desc %in% c(
+    #'StartZone', 
+    'MazeStem',
+    'GoalZone20sec')) %>%
+    #'StimLast10sec')) %>%
+  ggplot(aes(x=band_start_freq, group=trial_id, color=stage_desc)) +
+  geom_line(aes(y=band_power)) +
+  ggplot2::coord_flip() +
+  facet_grid(animal ~ channelLocation, scales = 'free') +
+  gtheme 
+```
+

@@ -8,13 +8,13 @@ library(purrr)
 
 
 ```{r read_data}
-#channel.loc = 'CA3'
 diode.signal = TRUE
 
 data_dir = '/mnt/DATA/chat_ripples/y-maze/'
+img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 
 if (diode.signal) {
-  #psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_single_std_th6.csv'))
+  psddf.ymaze = read_csv(paste0(data_dir,'/detected_ripples_bac/','psd_table_diode_single_std_th6.csv'))
   psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
   ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_diode_th6.csv'))
 } else {
@@ -26,7 +26,7 @@ prepare.ymaze.df = function(df) {
   df$animal = as.factor(df$animal)
   df$channel = as.factor(df$channel)
   df$laserOn = as.factor(df$laserOn)
-  
+    
   df = df %>%
     dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
   
@@ -93,10 +93,12 @@ ripples.ymaze %>%
   filter(stage_desc %in% c('StartZone', 'DuringStim')) %>%
   ggplot() +
   geom_point(aes(x=peak_t, y=trial_no, color=laserOn)) +
-  facet_grid(channelLocation ~ stage_desc, scales = 'free_x') +
+  facet_grid(channelLocation ~ stage_desc) +#, scales = 'free_x') +
+  gtheme +
   xlab('Time (s)') + ylab('# trial')
-  
-  
+
+ggsave(paste0(img_dir, '/indiv_ripples_time.svg'), units = 'cm',
+       height=7, width=12)
 ```
 
 
@@ -112,7 +114,8 @@ swr.ymaze.summary$date = as.factor(swr.ymaze.summary$date)
 
 ```{r}
 swr.ymaze.summary %>%
-  filter(stage_desc == 'DuringStim', learning_day >= 5)  %>%
+  #filter(stage_desc == 'DuringStim', learning_day >= 5)  %>%
+  filter(stage_desc == 'DuringStim')  %>%
   dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
                 date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
   ggplot() +
@@ -126,6 +129,9 @@ swr.ymaze.summary %>%
   xlab('Learning day') + ylab('Ripple incidence at goal (Hz)') +
   facet_grid(. ~ channelLocation) +
   gtheme
+
+ggsave(paste0(img_dir, '/ripples_change.svg'), units = 'cm',
+       height=5, width=8)
 ```
 
 ```{r}
@@ -184,14 +190,16 @@ psddf.ymaze.correct %>%
 
 TODO: 
 [] Replicate figure: https://www.nature.com/articles/s41593-017-0061-5/figures/3
-   - location of SWRs: x - time, y- # trial, point for ripple
-   - Spectrogram on ymaze? avg for a day
-[] Ripples correlation with success??
+   [x] location of SWRs: x - time, y- # trial, point for ripple
+   [x] Spectrogram on ymaze? avg for a day
+   
+[] Power in different frequency bands
 [] 20-50Hz oscillations at reward for CA3
+[] coherence between CA1 and CA3
 [x] look at ymaze % correct to justify choice of learning day 5 and 6 for ripples comparioson
 [x] look at the found ripples - are they good quality? are they long enough?
 [x] look at all channels
-[] coherence between CA1 and CA3
+[] Ripples correlation with success??
 
 Problems:
 [x] exclude SWRs during movement as detected from EMG

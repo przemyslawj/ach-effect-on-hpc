@@ -46,7 +46,6 @@ filtered = applyRippleFilter(dataArray, channelTable, fs);
 timeIndecies = 1:size(dataArray, 2);
 
 
-freqrange = 1:2:50;
 for chan_i = 1:size(channelTable, 1)
     loc = channelTable.location(chan_i);
     if strcmp(loc, 'EMG') || strcmp(loc, 'Laser')
@@ -86,11 +85,13 @@ for chan_i = 1:size(channelTable, 1)
         figure;
     end
     subplot(4,1,3);
-    draw_cwt(wt_pow(high_freqs,timeIndecies), timepoints(timeIndecies), wfreqs(high_freqs));
+    A = z_score(wt_pow(high_freqs,timeIndecies));
+    draw_cwt(A, timepoints(timeIndecies), wfreqs(high_freqs));
     %draw_keypoints(time_mouse_arrived, [min(wfreqs(high_freqs)), max(wfreqs(high_freqs))], lengthSeconds, secondOffset);
     
     subplot(4,1,4);
-    draw_cwt(wt_pow(low_freqs,timeIndecies), timepoints(timeIndecies), wfreqs(low_freqs));
+    A = zscore(wt_pow(low_freqs,timeIndecies));
+    draw_cwt(A, timepoints(timeIndecies), wfreqs(low_freqs));
     %draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds, secondOffset);
     ax = gca;
     ax.XAxis.Visible = 'on';
@@ -116,25 +117,6 @@ function A = z_score(cfs)
     A = bsxfun(@max, A, minZscore);
 end
 
-function [] = draw_cwt(cfs,time,freq)
-    A = z_score(cfs);
-    args = {time, freq, A};
-    surf(args{:},'edgecolor','none');
-    view(0,90);
-    axis xy;
-    axis tight;
-    ax = gca;
-    ax.XAxis.Visible = 'off'; % remove x-axis
-    %ax.YTick = 0:10:200;
-    
-    shading interp; 
-    %colormap(parula(256));
-    colormap(jet);
-    colorbar('off');
-    %h = colorbar;
-    %h.Label.String = 'z-score';
-    ylabel('Frequency (Hz)');
-end
 
 function [] = draw_keypoints(time_mouse_arrived, ylim, lengthSeconds, secondOffset)
     if isempty(time_mouse_arrived)

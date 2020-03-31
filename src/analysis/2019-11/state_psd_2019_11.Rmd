@@ -59,7 +59,7 @@ mobile.col = '#35b779ff'
 
 
 ```{r include=FALSE}
-channel.loc = 'CA3'
+channel.loc = 'CA1'
 diode.signal = FALSE
 
 data_dir =  '/mnt/DATA/chat_ripples/baseline'
@@ -111,13 +111,6 @@ levels(psddf$state) = states.new
 
 
 ```{r}
-# TODO: include only best electrode
-#electrodes.selected = read_csv('/mnt/DATA/Clara/ymaze/selected_electrodes.csv')
-#electrodes.selected$channel = as.factor(electrodes.selected$channel)
-#best.ripple.df = left_join(electrodes.selected, ripple.df, by=c('animal', 'channel')) %>%
-#  mutate(ripple_dur = end_time - start_sec)
-#best.psddf = left_join(electrodes.selected, psddf, by=c('animal', 'channel')) %>%
-#  filter(!is.na(trial_id))
 best.ripple.df = ripple.df %>%
   mutate(ripple_dur = end_time - start_sec)
 best.psddf = psddf %>%
@@ -167,244 +160,84 @@ Effects of the laser on signal spectrum:
 
 Change in the  power of the signal for specific frequency bands.
 
-```{r include=TRUE}
 
-mean.wona = function(X) {
-  mean(X, na.rm=TRUE)
-}
+```{r}
+source('psd_analysis.R')
+psd.molten = melt.freq.bands(best.psddf, extra.id.vars = c())
+psd.ratio.df = calc.freq.band.ratio(psd.molten)
 
-sd.wona = function(X) {
-  sd(X, na.rm=TRUE)
-}
-
-animals.bands.df = data.frame()
-for (animal_name in levels(filtered.psddf$animal)) {
-  for (state_name in levels(filtered.psddf$state)) {
-    animal.df = filter(filtered.psddf, animal == animal_name, state == state_name)
-    animal.df$trial_id_num = as.integer(animal.df$trial_id)
-    animal.psd.cols = animal.df %>%
-      select(trial_id_num, starts_with('all_psd_xx'))
-    dm = as.matrix(animal.psd.cols)
-    nbands = dim(dm)[2]
-    nrows = dim(dm)[1]
-    dm.diff = matrix(rep(0, nbands * nrows/3), ncol=nbands)
-    if (nrows > 0) {
-      for (i in 1:(nrows/3)) {
-        denom = dm[3*i-2,]
-        nom = dm[3*i-1,]
-        for (j in 1:length(denom)) {
-          if (denom[j] == 0) {
-            denom[j] = dm[3*i-1,j]
-          }
-          if (nom[j] == 0) {
-            nom[j] = NA
-          }
-        }
-        dm.diff[i,] = nom / denom 
-      }
-    }
-    #last_row = which(dm.diff[,1] != 1)[1] - 1
-    means = apply(dm.diff[,2:nbands], 2,FUN=mean.wona)
-    sds = apply(dm.diff[,2:nbands], 2,FUN=sd.wona)
-
-    bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
-    bands.df = data.frame(band=bands[1:(nbands-2)],
-                          mchange=means[1:(nbands-2)],
-                          sdchange=sds[1:(nbands-2)],
-                          animal=rep(animal_name,nbands-2),
-                          state=rep(state_name,nbands-2))
-
-    animals.bands.df = rbind(animals.bands.df, bands.df)
-  }
-}
-
+animal.psd.ratio = psd.ratio.df %>%
+  dplyr::group_by(animal, band_name, band_start_freq, channelLocation) %>%
+  dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
+                   ratio.sem=sem(power.ratio.change))
+  
 axis.breaks=c(1:9,seq(10,100,10))
 axis.labels=rep('', length(axis.breaks))
 axis.labels[1]=1
 axis.labels[10]=10
 axis.labels[19]=100
-#animals.bands.df.filtered = filter(animals.bands.df, animal %in% c('K4', 'K2', 'K1', 'K3', 'L1'))
-animals.bands.df.filtered = animals.bands.df
 
-theta.band = data.frame(
-  xmin=c(7, 25, 80), 
-  xmax=c(12, 45, 150), 
-  band=c('theta', 'slow gamma', 'fast gamma'))
-
-gbands = ggplot(animals.bands.df.filtered) +
-  geom_line(aes(x=band, y=mchange, group=animal, colour=animal)) +
+animal.psd.ratio %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean, colour=animal)) + 
+  geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
+              alpha=0.1) +
   geom_rect(data=theta.band, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  #geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=animal), 
-  #            colour='black', size=0.05, alpha=0.05)+
   scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
-  #scale_color_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), 
-  #                   values=c(immobile.col, mobile.col, 'black')) +
   geom_hline(yintercept=1, linetype='dashed') +
-  facet_grid(. ~ state) +
+  facet_grid(. ~ channelLocation) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
   gtheme +
   theme(legend.position = 'top')
-
-gbands
-#ggsave(file=paste0(img_dir, '/', '2_baseline_psd_change.svg'), gbands, width=9, height=4)
-ggsave(file=paste0(img_dir, '/', '2_psd_change_mobile_vs_immobile.pdf'), gbands,
-       width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
-```{r include=TRUE}
 
-mean.wona = function(X) {
-  mean(X, na.rm=TRUE)
-}
+```{r}
 
-sd.wona = function(X) {
-  sd(X, na.rm=TRUE)
-}
-
-animals.bands.df = data.frame()
-for (state_name in levels(filtered.psddf$state)) {
-  animal.df = filter(filtered.psddf, state == state_name) 
-    
-  animal.df$trial_id_num = as.integer(animal.df$trial_id)
-  animal.psd.cols = animal.df %>% 
-    select(trial_id_num, starts_with('all_psd_xx')) 
-  dm = as.matrix(animal.psd.cols)
-  nbands = dim(dm)[2]
-  nrows = dim(dm)[1]
-  dm.diff = matrix(rep(0, nbands * nrows/3), ncol=nbands)
-  if (nrows > 0) {
-    for (i in 1:(nrows/3)) {
-      denom = dm[3*i-2,]
-      nom = dm[3*i-1,]
-      for (j in 1:length(denom)) {
-        if (denom[j] == 0) {
-          denom[j] = dm[3*i-1,j]
-        }
-        if (nom[j] == 0) {
-          nom[j] = NA
-        }
-      }
-      dm.diff[i,] = nom / denom
-    }
-  }
-  #last_row = which(dm.diff[,1] != 1)[1] - 1
-  means = apply(dm.diff[,2:nbands], 2,FUN=mean.wona)
-  sds = apply(dm.diff[,2:nbands], 2,FUN=sem)
+channel.psd.ratio = psd.ratio.df %>%
+  dplyr::group_by(band_name, band_start_freq, channelLocation) %>%
+  dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
+                   ratio.sem=sem(power.ratio.change))
   
-  bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
-  bands.df = data.frame(band=bands[1:(nbands-2)],
-                        mchange=means[1:(nbands-2)],
-                        sdchange=sds[1:(nbands-2)],
-                        state=rep(state_name,nbands-2))
-  
-  animals.bands.df = rbind(animals.bands.df, bands.df)
-}
-
-axis.breaks=c(1:9,seq(10,100,10))
-axis.labels=rep('', length(axis.breaks))
-axis.labels[1]=1
-axis.labels[10]=10
-axis.labels[19]=100
-gbands = ggplot(animals.bands.df) +
-  geom_line(aes(x=band, y=mchange, colour=state), size=1) +
-  geom_ribbon(aes(x=band, ymin=mchange-sdchange, ymax=mchange+sdchange, group=state, fill=state), alpha=0.1)+
+channel.psd.ratio %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=channelLocation, y=ratio.mean, colour=channelLocation)) + 
+  geom_ribbon(aes(x=band_start_freq, group=channelLocation, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
+              alpha=0.1) +
+  geom_rect(data=theta.band, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
-  #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
-  gtheme +
-  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
-  scale_y_continuous(breaks=c(0.5, 1.0, 1.5)) +
-  scale_color_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), values=c(mobile.col, immobile.col, 'black')) +
-  scale_fill_manual(labels=c('Immobile w light / Immobile wo light', 'Mobile w light / Mobile wo light'), values=c(mobile.col, immobile.col, 'black')) +
+  facet_grid(. ~ channelLocation) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
-  labs(colour = "", fill='') +
-  theme(legend.position = 'top')  
-
-gbands
-#ggplot2::ggsave(file=paste0(img_dir, '/', '3_psd_change_mobile_vs_immobile.svg'), gbands, width=11, height=8, units='cm')
-ggsave(file=paste0(img_dir, '/', '3_psd_change_mobile_vs_immobile.pdf'), gbands,
-       width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
+  gtheme +
+  theme(legend.position = 'none')
 ```
 
 ```{r}
-library(reshape2) 
-animals.bands.df = data.frame()
-
-
 sampled.trials = group_by(filtered.psddf, state, animal) %>%
   select(trial_id) %>%
   sample_n(6) %>%
   ungroup()
 
-samples.df = filter(filtered.psddf, trial_id %in% sampled.trials$trial_id)
-
-for (state_name in levels(filtered.psddf$state)) {
-  animal.df = filter(samples.df, state == state_name) 
-  animal.df$trial_id_num = as.integer(animal.df$trial_id)
-  animal.psd.cols = animal.df %>% 
-    select(trial_id_num, starts_with('all_psd_xx')) 
-  dm = as.matrix(animal.psd.cols)
-  nbands = dim(dm)[2]
-  nrows = dim(dm)[1]
-  dm.diff = matrix(rep(0, nbands * nrows/3), ncol=nbands)
-  trial_ids = rep('', nrows/3)
-  animal_ids = rep('', nrows/3)
-  if (nrows > 0) {
-    for (i in 1:(nrows/3)) {
-      denom = dm[3*i-2,]
-      nom = dm[3*i-1,]
-      for (j in 1:length(denom)) {
-        if (denom[j] == 0) {
-          denom[j] = dm[3*i-1,j]
-        }
-        if (nom[j] == 0) {
-          nom[j] = NA
-        }
-      }
-      dm.diff[i,] = nom / denom
-      trial_ids[i] = unname(animal.df[[3*i-1,'trial_id']])
-      animal_ids[i] = unname(animal.df[[3*i-1,'animal']])
-    }
-  }
-  
-  bands = c(0.1, 0.5, 1.0, 1.5, exp(seq(0.7, 5.30, by=0.05)))
-  A = as.data.frame(dm.diff[,2:nbands])
-  names(A) = bands[1:(nbands-2)]
-  A$trial_id = trial_ids
-  A$animal_id = animal_ids
-  A.melt = melt(A, id = c('trial_id', 'animal_id'))
-  A.melt$state = rep(state_name, dim(A.melt)[1])
-    
-  animals.bands.df = rbind(animals.bands.df, A.melt)
-}
-
-animals.bands.df$trial_id = as.factor(animals.bands.df$trial_id )
-animals.bands.df$animal_id = as.factor(animals.bands.df$animal_id )
-animals.bands.df$state = as.factor(animals.bands.df$state )
-animals.bands.df$variable = bands[animals.bands.df$variable]
-
-axis.breaks=c(1:9,seq(10,100,10))
-axis.labels=rep('', length(axis.breaks))
-axis.labels[1]=1
-axis.labels[10]=10
-axis.labels[19]=100
-gbands = ggplot(animals.bands.df, aes(x=variable, y=value, colour=state, group=trial_id)) +
-  geom_line(size=0.5 * px2pt) +
-  geom_hline(yintercept=1, linetype='dashed') +
-  #scale_x_continuous(breaks=c(10,30,50,70,100,150)) +
-  gtheme +
+psd.ratio.df %>%
+  filter(trial_id %in% sampled.trials$trial_id) %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=trial_id, y=power.ratio.change, colour=animal),
+            size=0.5 * px2pt) + 
+  #geom_rect(data=theta.band, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+  #          ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
   scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
-  scale_color_manual(labels=c('', ''), values=c(immobile.col, mobile.col)) +
-  scale_fill_manual(labels=c('', ''), values=c(immobile.col, mobile.col)) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  facet_grid(. ~ channelLocation) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
-  facet_grid(. ~ state) +
-  labs(colour = "", fill='') +
-  theme(legend.position = 'none')  
+  gtheme +
+  theme(legend.position = 'none')
 
-gbands
 ggsave(file=paste0(img_dir, '/', '3_baseline_theta_change_all.pdf'), 
        width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
 ```

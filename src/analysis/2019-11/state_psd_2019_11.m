@@ -7,16 +7,16 @@
 ripple_std_thr = 6;
 use_diode = 0;
 selected_channels_only = 1;
-datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-is_ymaze_trial = 1;
+%datarootdir = '/mnt/DATA/chat_ripples/y-maze';
+%is_ymaze_trial = 1;
 is_after_ymaze = 0;
-secondOffset = 2;
-%datarootdir = '/mnt/DATA/chat_ripples/baseline';
-%is_urethane_trial = 0;
-%is_ymaze_trial = 0;
-%secondOffset = 0;
+%secondOffset = 2;
+datarootdir = '/mnt/DATA/chat_ripples/baseline';
+%%is_urethane_trial = 0;
+is_ymaze_trial = 0;
+secondOffset = 0;
 
-trials_fpath = [datarootdir filesep 'trials.csv'];
+trials_fpath = [datarootdir filesep 'trials_short.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
 reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
@@ -182,7 +182,7 @@ for i = 1:nexp
             %[pxx, freqs] = pwelch(psd_xx, ...
             %    floor(downfs / 4), floor(downfs / 8), floor(downfs / 2), downfs);
             [cws, freqs] = cwt(psd_xx, 'amor', downfs);        
-            pxx = median(abs(cws .^ 2), 2);
+            pxx = abs(cws .^ 2);
             freqs = fliplr(freqs')';
             pxx = fliplr(pxx')';
 
@@ -267,6 +267,7 @@ writetable(all_ripples, [datarootdir filesep 'ripples' outfile_suffix]);
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
     pow = bandpower(pxx,f1,band,'psd');
+    pow = mean(pow, 2);
 end
 
 function [ pow ] = TotalBandPower2(f1, pxx, band)
@@ -276,6 +277,7 @@ function [ pow ] = TotalBandPower2(f1, pxx, band)
 end
 
 function [ freq ] = PeakFreq(f1, pxx, band)
+    pxx = mean(pxx, 2);
     band_freqs_index = find(f1 >= band(1) & f1 <= band(2));
     [~, maxValIndex] = max(pxx(band_freqs_index));
     freqs = f1(band_freqs_index);
