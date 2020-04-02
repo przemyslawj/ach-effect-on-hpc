@@ -1,5 +1,5 @@
 %datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
-datarootdir = '/mnt/DATA/chat_ripples/y-maze/2019-11-11';
+datarootdir = '/mnt/DATA/chat_ripples/y-maze/2019-11-13';
 %datarootdir = '/mnt/DATA/chat_ripples/sleep/2019-12-03';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);

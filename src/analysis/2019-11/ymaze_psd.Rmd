@@ -2,62 +2,172 @@
 title: "R Notebook"
 output: html_notebook
 ---
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(cowplot)
+library(ggpubr)
+library(purrr)
+select = dplyr::select
 
+library(lmerTest)
+source('psd_analysis.R')
+```
 
 ```{r}
-psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
+data_dir =  '/mnt/DATA/chat_ripples/y-maze'
+diode.signal = TRUE
+if (diode.signal) {
+  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
+} else {
+  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))  
+}
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
+
+trial.info.df = read_csv(paste(data_dir, 'trials.csv', sep='/')) %>%
+  dplyr::mutate(file_name=paste0('signal/', animal, '_trial_', trial, '_g0'))
+trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
+
 psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
                         by=c('date', 'animal', 'file_name'))
 ```
 
+# Effect of the task stage
 ```{r}
-bands = c(exp(seq(0.7, 5.30, by=0.05)))
-psd.molten = 
-  filter(psddf.ymaze, correct==1) %>%
-  select(animal, date, learning_day, trial_id, channelLocation, laserOn, stage_desc, dirname, starts_with('all_psd_xx')) %>%
-  reshape2::melt(id.vars=c('animal', 'date', 'learning_day', 'trial_id', 'channelLocation','laserOn', 'stage_desc', 'dirname'), variable.name='band_name', value.name='band_power')  %>%
-  dplyr::mutate(band_start_freq = bands[as.numeric(stringr::str_replace(band_name, 'all_psd_xx_', ''))])
+band.zscore = melt.freq.bands(filter(psddf.ymaze, correct==1), 
+                             extra.id.vars=c('learning_day', 'dirname'),
+                             psd.vars.prefix='all_psd_z_' ) %>%
+  dplyr::rename(band.zscore=band_power)
 
-
-psd.day.mean = psd.molten %>%
-  dplyr::group_by(animal, date, stage_desc, learning_day, channelLocation, laserOn, band_name) %>%
-  dplyr::summarise(mean.power = mean(band_power),
-                   sem.power=sem(band_power)) %>%
-  dplyr::mutate(band_start_freq = bands[as.numeric(stringr::str_replace(band_name, 'all_psd_xx_', ''))])
+psd.molten = melt.freq.bands(filter(psddf.ymaze, correct==1), 
+                             extra.id.vars=c('learning_day', 'dirname'),
+                             psd.vars.prefix='all_psd_xx_')
 ```
 
+
 ```{r}
-psd.day.mean %>%
-  filter(animal == 'BS') %>%
-  filter(laserOn==0) %>%
-  filter(learning_day == 6) %>% 
-  filter(stage_desc %in% c(
-    #'StartZone', 
-    'MazeStem',
-    'GoalZone20sec')) %>%
-    #'StimLast10sec')) %>%
-  ggplot(aes(x=band_start_freq, group=stage_desc, color=stage_desc)) +
-  geom_line(aes(y=mean.power)) +
-  ggplot2::coord_flip() +
-  facet_grid(. ~ channelLocation, scales='free') +
-  gtheme 
-```
-TODO: translate to zscore
-```{r}
-psd.molten %>%
+axis.breaks=c(1:9,seq(10,100,10), 200)
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+axis.labels[20]=200
+
+band.zscore %>%
+  filter(laserOn == 0) %>%
   #filter(animal == 'BS') %>%
-  filter(laserOn==0) %>%
-  filter(learning_day == 6) %>% 
-  filter(stage_desc %in% c(
-    #'StartZone', 
-    'MazeStem',
-    'GoalZone20sec')) %>%
-    #'StimLast10sec')) %>%
-  ggplot(aes(x=band_start_freq, group=trial_id, color=stage_desc)) +
-  geom_line(aes(y=band_power)) +
-  ggplot2::coord_flip() +
-  facet_grid(animal ~ channelLocation, scales = 'free') +
-  gtheme 
+  filter(learning_day == 6)  %>%
+  filter(stage_desc %in% c('MazeStem', 'DuringStim')) %>%
+  #filter(stage_desc %in% c('DuringStim')) %>%
+  dplyr::mutate(trial_stage = paste0(trial_id, stage_desc, sep='_')) %>% 
+  ggplot(aes(x=band_start_freq, y=band.zscore, group=trial_stage, color=stage_desc)) +
+  geom_line(size=0.5*px2pt)  +
+  facet_grid(laserOn ~ channelLocation) +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept = 0.0, linetype='dashed') +
+  gtheme
+```
+
+```{r}
+daily.band.zscore = band.zscore %>%
+  group_by(channelLocation, date, learning_day, laserOn, stage_desc, band_start_freq) %>%
+  dplyr::summarise(mean.zscore = mean(band.zscore),
+                   sem.zscore = sem(band.zscore))
+
+daily.band.zscore %>%
+  filter(laserOn == 0) %>%
+  #filter(animal == 'BS') %>%
+  filter(learning_day == 6)  %>%
+  filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
+  #filter(stage_desc %in% c('MazeStem', 'AfterConsumedReward_10_sec')) %>%
+  #dplyr::mutate(animal_stage = paste0(animal, stage_desc, sep='_')) %>% 
+  ggplot(aes(x=band_start_freq, y=mean.zscore, group=stage_desc)) +
+  geom_line(aes(color=stage_desc), size=2*px2pt) +
+  geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
+  facet_grid(. ~ channelLocation) +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept = 0.0, linetype='dashed') +
+  gtheme +
+  xlab('Frequency (Hz)') +
+  ylab('Power z-score') 
+```
+
+```{r}
+daily.band.zscore %>%
+  dplyr::mutate(date_laser=paste(date, laserOn, sep='_')) %>%
+  filter(learning_day >= 4)  %>%
+  filter(stage_desc %in% c('GoalZone20sec')) %>%
+  ggplot(aes(x=band_start_freq, y=mean.zscore, group=date_laser)) +
+  geom_line(aes(color=laserOn), size=1*px2pt) +
+  #geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
+  facet_grid(. ~ channelLocation) +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept = 0.0, linetype='dashed') +
+  gtheme
+```
+Effect of the stage on PSD
+```{r}
+animal.psd = psd.molten %>%
+  group_by(animal, learning_day, channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  dplyr::summarise(mean.power = mean(log(band_power)),
+                   sem.power = sem(log(band_power)))
+```
+
+```{r}
+animal.psd %>%
+  filter(laserOn == 0) %>%
+  filter(learning_day==6) %>%
+  filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
+  ggplot(aes(x=band_start_freq, y=mean.power, group=stage_desc)) +
+  geom_line(aes(color=stage_desc), size=2*px2pt) +
+  geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
+  facet_grid(animal ~ channelLocation) +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept = 0.0, linetype='dashed') +
+  gtheme +
+  xlab('Frequency (Hz)') +
+  ylab('Power z-score') 
+```
+# Laser effect 
+
+
+```{r}
+animal.psd = psd.molten %>%
+  filter(learning_day >= 5)  %>%
+  group_by(animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  dplyr::summarise(mean.power = mean(log(band_power)),
+                   sem.power = sem(log(band_power)))
+```
+
+
+```{r}
+animal.psd %>%
+  #filter(stage_desc %in% c('DuringStim')) %>%
+  filter(stage_desc %in% c('GoalZone20sec')) %>%
+  dplyr::mutate(animal_laser = paste(animal, laserOn, sep='_')) %>%
+  ggplot(aes(x=band_start_freq, y=mean.power, group=animal_laser)) +
+  geom_line(aes(color=laserOn), size=1*px2pt) +
+  geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
+  facet_grid(animal ~ channelLocation) +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  #geom_hline(yintercept = 0.0, linetype='dashed') +
+  gtheme +
+  xlab('Frequency (Hz)') + ylab('Power (log)')
+```
+
+No change of power in ripple band.
+```{r}
+subset.psddf = filter(psddf.ymaze, learning_day == 6,
+                      correct == 1,
+                      channelLocation == 'CA3',
+                      stage_desc == 'GoalZone20sec')
+
+m.full = lmerTest::lmer(log(pow_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.psddf, REML = TRUE) 
+summary(m.full)
+plot.model.diagnostics(m.full, subset.psddf$animal, subset.psddf$laserOn)
+coef(m.full)$animal
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
 ```
 

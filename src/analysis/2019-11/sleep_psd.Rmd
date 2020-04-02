@@ -1,0 +1,494 @@
+---
+title: "Effect of cholinergic stimulation on CA1 and CA3"
+output:
+  html_document:
+    df_print: paged
+---
+
+TODO:
+- divide analysis by channel location
+- do analysis on diode
+```{r include=FALSE}
+knitr::opts_chunk$set(include=FALSE, collapse=TRUE, warning=FALSE, echo=FALSE)
+```
+
+Effects of the laser activation on the signal recorded in baseline conditions.
+
+The recordings session were divided into the ones where the mouse was immobile (sleep) and mobile (awake).
+
+Only one recording channel per animal is included for the comparisions. The channel was selected based on SNR, presence of theta oscillations when the mouse was mobile, and the number of detected ripples. The strength of the optogenetic activation could be different in each mouse, and also be different depending on the exact recording channel positions, so I showed the laser effects or each mouse separately.
+
+
+```{r include=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(cowplot)
+library(ggpubr)
+select = dplyr::select
+
+library(lmerTest)
+```
+
+```{r}
+sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
+```
+
+```{r include=FALSE}
+img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/baseline/'
+px2pt = 1/(ggplot2::.pt*72.27/96)
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=8, family = 'Arial'), 
+        panel.background = element_rect(fill = 'white'),
+        line = element_line(size = px2pt),
+        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.text.x=element_text(size=8, colour = "black"),
+        axis.text.y=element_text(size=8, colour = "black"),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8))
+
+col_width = 8.5 
+immobile.col = '#440154ff'
+mobile.col = '#35b779ff'
+```
+
+
+
+```{r include=FALSE}
+diode.signal = FALSE
+
+data_dir =  '/mnt/DATA/chat_ripples/baseline'
+
+if (diode.signal) {
+  psddf = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
+} else {
+  psddf = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
+}
+psddf$animal = as.factor(psddf$animal)
+psddf$channel = as.factor(psddf$channel)
+psddf$laserOn = as.factor(psddf$laserOn)
+psddf$state = as.factor(psddf$state)
+
+psddf = psddf %>%
+  dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
+psddf$trial_id = as.factor(psddf$trial_id)
+
+freq.bands.df = data.frame(
+  band=c('theta', 'slow gamma', 'fast gamma'),
+  xmin=c(5, 25, 80),
+  xmax=c(9, 45, 150)
+)
+```
+
+```{r}
+states.new = list(Immobile='asleep',Mobile="awake")
+levels(psddf$state) = states.new
+```
+
+# Effects on the signal spectrum
+```{r}
+psddf = mutate(psddf,
+                    theta_over_slow = pow_theta / pow_slow,
+                    theta_over_supratheta = pow_theta / pow_above_theta)
+```
+
+
+```{r}
+source('psd_analysis.R')
+psd.molten = melt.freq.bands(psddf, extra.id.vars = c())
+psd.ratio.df = calc.freq.band.ratio(psd.molten)
+
+animal.psd.ratio = psd.ratio.df %>%
+  dplyr::group_by(animal, band_name, band_start_freq, channelLocation) %>%
+  dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
+                   ratio.sem=sem(power.ratio.change))
+  
+axis.breaks=c(1:9,seq(10,100,10))
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+
+animal.psd.ratio %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean)) + 
+  #geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
+  #            alpha=0.1) +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  facet_grid(. ~ channelLocation) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power ratio') +
+  gtheme +
+  theme(legend.position = 'top')
+```
+
+
+```{r}
+
+channel.psd.ratio = psd.ratio.df %>%
+  dplyr::group_by(band_name, band_start_freq, channelLocation) %>%
+  dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
+                   ratio.sem=sem(power.ratio.change))
+  
+channel.psd.ratio %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=channelLocation, y=ratio.mean, colour=channelLocation)) + 
+  geom_ribbon(aes(x=band_start_freq, group=channelLocation, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
+              alpha=0.1) +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  facet_grid(. ~ channelLocation) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power ratio') +
+  gtheme +
+  theme(legend.position = 'none')
+```
+```{r}
+daily.psd = psd.molten %>%
+  group_by(channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  dplyr::summarise(mean.power = mean(log(band_power)),
+                   sem.power = sem(log(band_power)))
+
+daily.psd %>%
+  filter(stage_desc %in% c('stim', 'before_stim')) %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, y=mean.power, group=laserOn, color=laserOn), size=2*px2pt) +
+  geom_ribbon(aes(x=band_start_freq, y=mean.power, group=laserOn, ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-15, ymax=-8, alpha=0.05, fill='grey10') +
+  facet_grid(. ~ channelLocation) +
+  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  gtheme +
+  xlab('Frequency (Hz)') + ylab('Power (log)')
+```
+
+
+
+```{r}
+sampled.trials = group_by(psd.ratio.df, animal) %>%
+  select(trial_id) %>%
+  sample_n(2) %>%
+  ungroup()
+
+psd.ratio.df %>%
+  filter(trial_id %in% sampled.trials$trial_id) %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=trial_id, y=power.ratio.change, colour=animal),
+            size=0.5 * px2pt) + 
+  #geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+  #          ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  facet_grid(. ~ channelLocation) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power ratio') +
+  gtheme +
+  theme(legend.position = 'none')
+
+ggsave(file=paste0(img_dir, '/', '3_baseline_theta_change_all.pdf'), 
+       width=col_width, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
+```
+
+
+Increase in ~50Hz for K2 and others in sleep. Try to see if artifact or not by adding 50Hz noise and seeing how differs?
+
+```{r}
+psddf.on = psddf %>%
+  group_by(trial_id, channelLocation) %>%
+  filter(laserOn==1) %>%
+  slice(1) %>%
+  mutate(desc='2_stim')
+trial.ids = unique(psddf.on$trial_id)
+
+psddf.off = psddf %>%
+  group_by(trial_id, channelLocation) %>%
+  filter(laserOn == 0) %>%
+  filter(trial_id %in% trial.ids) %>%
+  slice(1)  %>%
+  mutate(desc='1_before')
+
+paired.psddf.on = left_join(psddf.off, psddf.on, by='trial_id', suffix=c('.fst', '.snd')) %>%
+  mutate(change='on')
+
+psddf.off2 = psddf %>%
+  group_by(trial_id, channelLocation) %>%
+  filter(laserOn==0) %>%
+  filter(trial_id %in% trial.ids) %>%
+  dplyr::slice(2) %>%
+  mutate(desc='3_after')
+
+trial.ids.off = unique(psddf.off$trial_id)
+psddf.on = filter(psddf.on, trial_id %in% trial.ids.off)
+
+psddf.all = bind_rows(psddf.on, psddf.off, psddf.off2)
+psddf.all$animal = droplevels(psddf.all$animal)
+psddf.all$desc = factor(psddf.all$desc, levels=c('1_before','2_stim','3_after'))
+
+paired.psddf.off = left_join(psddf.on, psddf.off2, by='trial_id', suffix=c('.fst', '.snd')) %>%
+  mutate(change='off')
+```
+
+```{r}
+paired.psddf.all = psddf.all %>%
+  mutate(paired_group=interaction(animal, desc, lex.order=TRUE)) %>%
+  arrange(trial_id)
+paired.psddf.all$paired_group_num=as.integer(paired.psddf.all$paired_group)
+paired.psddf.all$paired_group = as.factor(paired.psddf.all$paired_group)
+```
+
+```{r}
+my.paired.plot = function(paired.psddf.all, varname) {
+  nanimals = length(levels(paired.psddf.all$animal))
+  g = ggplot(paired.psddf.all, aes_string(x='paired_group_num', y=varname)) +
+    geom_boxplot(aes(x=paired_group_num, group=paired_group_num, fill=desc), notch=FALSE) +
+    #geom_point(size=1) +
+    geom_jitter(size=1, width=0.1, height=0) +
+    geom_line(aes(group=trial_id), size=0.3, alpha=0.4, linetype=2) +
+    facet_grid(. ~ channelLocation) +
+    scale_x_continuous(breaks = seq(2,nanimals*3,3), labels = levels(paired.psddf.all$animal)) +
+    xlab('Animal')
+  return(g)
+}
+```
+
+```{r}
+normalise2before = function(df, varname) {
+  var.psddf = filter(df, desc == '1_before') %>%
+    rename_(total_value=varname) %>%
+    right_join(df, by='trial_id', suffix=c('.y','')) %>%
+    filter(total_value > 0) %>%
+    rename_(value=varname) %>%
+    mutate(norm.value = value / total_value) 
+  return(var.psddf)
+}
+
+theta.df.norm = normalise2before(paired.psddf.all, 'pow_theta') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, channelLocation, norm.value) %>%
+  mutate(band='Theta\n(5 - 9 Hz)')
+sgamma.df.norm = normalise2before(paired.psddf.all, 'pow_slow_gamma') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, channelLocation, norm.value) %>%
+  mutate(band='Slow Gamma\n(25 - 45 Hz)')
+theta.slow.df.norm = normalise2before(paired.psddf.all, 'theta_over_slow') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, channelLocation, norm.value) %>%
+  mutate(band='Theta / Slow')
+theta.supratheta.df.norm = normalise2before(paired.psddf.all, 'theta_over_supratheta') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, channelLocation, norm.value) %>%
+  mutate(band='Theta / Supra Theta')
+rippleband.df.norm = normalise2before(paired.psddf.all, 'pow_ripple_band') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, channelLocation, norm.value) %>%
+  mutate(band='Ripple band (130 - 200 Hz)')
+
+fgamma.df.norm = normalise2before(paired.psddf.all, 'pow_fast_gamma') %>%
+  filter(laserOn == 1) %>%
+  select(trial_id, animal, channelLocation, norm.value) %>%
+  mutate(band='Fast Gamma\n(80 - 150 Hz)')
+
+df.norm = bind_rows(theta.df.norm, theta.slow.df.norm, theta.supratheta.df.norm, sgamma.df.norm, fgamma.df.norm, rippleband.df.norm) 
+df.norm$band = as.factor(df.norm$band)
+df.norm$band = factor(df.norm$band, levels = levels(df.norm$band)[c(3, 4, 5, 2, 1, 6)])
+
+df.norm %>%
+  group_by(band, channelLocation)  %>%
+  dplyr::summarise(value.mean=mean(norm.value) %>% round(2),
+                   value.med=median(norm.value) %>% round(2) ,
+                   value.sem=sem(norm.value) %>% round(2))
+df.norm %>%
+  ggpubr::ggboxplot(x='band', y='norm.value', color='channelLocation') +
+  geom_hline(yintercept=1, linetype='dashed') +
+  stat_compare_means(aes(label = paste0(..p.format..)), 
+                     method='wilcox.test', 
+                     comparisons = list(c('1','2'), c('3', '4'))) +
+  gtheme + 
+  theme(legend.position='none',
+        axis.text.x=element_text(angle = 30, hjust = 1)) +
+  scale_color_manual(labels=c('', ''), values=c(immobile.col, mobile.col, 'black')) +
+  facet_grid(. ~ channelLocation) +
+  ylim(c(0,4)) +
+  ylab('') +
+  xlab('') 
+
+ggsave(file=paste0(img_dir, '/', '7_urethane_psd_change_boxplot_inset.pdf'), 
+       width=col_width, height=6, unit='cm', dpi=300, device=cairo_pdf)
+
+```
+
+```{r}
+df.norm$channelLocation = as.factor(df.norm$channelLocation)
+animal.df.norm = df.norm %>%
+  group_by(band, channelLocation, animal)  %>%
+  dplyr::summarise(value.mean=mean(norm.value),
+                   value.med=median(norm.value),
+                   value.sem=sem(norm.value)) %>%
+  mutate(band.num = as.integer(band) + (as.integer(channelLocation) - 1) / 4 - 1/8)
+animal.df.norm %>%
+  ggplot() +
+  #geom_jitter(aes(x=band, y=value.mean, color=state), height=0, width=0.1) +
+  geom_errorbar(aes(x=band.num, ymin=value.mean-value.sem, ymax=value.mean +value.sem, color=channelLocation), width=0.1) +
+  geom_point(aes(x=band.num, y=value.mean, color=channelLocation)) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  gtheme + 
+  theme(legend.position='none',
+        axis.text.x=element_text(angle = 30, hjust = 1)) +
+  scale_color_manual(labels=c('', ''), values=c(immobile.col, mobile.col, 'black')) +
+  scale_x_continuous(labels = levels(animal.df.norm$band), breaks = 1:6) +
+  facet_grid(. ~ channelLocation) +
+  ylim(c(0,2.1)) +
+  ylab('') +
+  xlab('') 
+
+ggsave(file=paste0(img_dir, '/', '7_psd_change_boxplot.pdf'), 
+       width=col_width, height=8, unit='cm', dpi=300, device=cairo_pdf)
+
+```
+
+Changes in bands power
+```{r}
+df.norm %>%
+  group_by(band, channelLocation) %>%
+  dplyr::summarise(mean.val= mean(norm.value) %>% round(2),
+                   med.val= median(norm.value) %>% round(2),
+                   sem.val=sem(norm.value) %>% round(2))
+```
+
+
+Paired tests
+```{r}
+channel.loc = 'CA1'
+metric_name = 'pow_theta'
+subset.df = bind_rows(psddf.off, psddf.on) %>%
+  filter(channelLocation == channel.loc)
+s.on = summary(subset(subset.df, laserOn ==0)[metric_name])
+print(paste(channel.loc, metric_name))
+print('Laser off')
+s.on[3]
+s.on[4]
+
+print('Laser on')
+s.off = summary(subset(subset.df, laserOn ==1)[metric_name])
+s.off[3]
+s.off[4]
+
+test.res = wilcox.test(formula(paste(metric_name, '~ laserOn')), subset.df, paired=TRUE)
+test.res['p.value']
+```
+
+```{r}
+channel.loc = 'CA3'
+
+plot.model.diagnostics = function(m, animals, laser_states) {
+  df = data.frame(res=unname(residuals(m)), fitted=unname(fitted(m)), animal=animals, laser=laser_states) 
+  
+  ggplot(df) +
+    geom_point(aes(x=res, y=fitted, colour=animal, shape=laser)) +
+    theme(legend.position = 'none') -> g1
+  
+  X=qqnorm(residuals(m.full), plot.it=FALSE)
+  data.frame(x=X$x, y=X$y, animal=animals, laser=laser_states) %>%
+    ggplot() +
+    geom_point(aes(x=x, y=y, colour=animal, shape=laser)) +
+    stat_qq_line(mapping=aes(sample=res), data=df) +
+    xlab('Theoretical quantiles') +
+    ylab('Sample quantiles') +
+    theme(legend.position = 'top') -> g2
+  
+  plot_grid(g1,g2)
+}
+
+psddf.starts = bind_rows(psddf.off, psddf.on)  %>%
+  filter(channelLocation == channel.loc)
+
+m.full = lmerTest::lmer(log(pow_ripple_band) ~ laserOn + (1 + laserOn | animal), data=psddf.starts, REML = TRUE) 
+#m.full = lmerTest::lmer(theta_over_supratheta ~ laserOn + (1 + laserOn | animal), data=psddf.starts, REML = TRUE) 
+summary(m.full)
+plot.model.diagnostics(m.full, psddf.starts$animal, psddf.starts$laserOn)
+coef(m.full)$animal
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+```
+
+Theta peaks
+```{r}
+psddf.starts %>%
+  group_by(channelLocation, laserOn) %>%
+  dplyr::summarise(peak_theta.mean = mean(peak_theta),
+                   peak_theta.median = median(peak_theta),
+                   peak_theta.sem = sem(peak_theta))
+```
+
+
+```{r}
+psddf %>%
+  filter(peak_theta > 0) %>%
+  ggplot() +
+  geom_histogram(aes(x=dom_freq, fill=laserOn), alpha=0.3, binwidth = 1) +
+  facet_grid(. ~ channelLocation)
+```
+
+Increase in count of the theta-dominated trials
+```{r}
+psddf.all %>%
+  mutate(theta.dom = dom_freq >= freq.bands.df$xmin[1] & dom_freq <= freq.bands.df$xmax[1],
+         slow.dom = dom_freq < freq.bands.df$xmin[1],
+         vslow.dom = dom_freq <= 4,
+         supra.dom = dom_freq > 10 & dom_freq < 25,
+         sgamma.dom = dom_freq >= freq.bands.df$xmin[2] & dom_freq <= freq.bands.df$xmax[2]) %>%
+  group_by(channelLocation, desc) %>%
+  dplyr::summarise(n=n(),
+                   theta.pct = sum(theta.dom)/n %>% round(2),
+                   slow.pct = sum(slow.dom)/n %>% round(2),
+                   vslow.pct = sum(vslow.dom)/n %>% round(2),
+                   supra.pct = sum(supra.dom)/n %>% round(2),
+                   sgamma.pct = sum(sgamma.dom)/n %>% round(2)) 
+
+```
+
+Peak freq of theta:
+```{r}
+bind_rows(psddf.off, psddf.on) %>%
+  #filter(channelLocation==channel.loc) %>%
+  ggplot() +
+  geom_jitter(aes(x=animal, y=peak_theta, shape=channelLocation, color=laserOn), width=0.2)
+```
+
+
+Slow Gamma (25 - 35 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
+
+```{r include=TRUE}
+my.paired.plot(paired.psddf.all, 'pow_ripple_band') +
+  ylab('Power in ripple band (130 - 200 Hz)')
+ggsave(file=paste0(img_dir, '/', '4_baseline_spow_ripple_change.svg'), width=9, height=4)
+#wilcox.test(paired.psddf.on$pow_slow_gamma.fst, paired.psddf.on$pow_slow_gamma.snd, paired = TRUE)
+```
+
+Fast Gamma (80 - 150 Hz) decreases on stimulation, but the effect is only present for K4 when mice are awake.
+
+```{r include=TRUE}
+gfgamma = my.paired.plot(paired.psddf.all, 'pow_fast_gamma') +
+  ylab('Power fast gamma')
+gfgamma
+ggsave(file=paste0(img_dir, '/', '5_baseline_fgamma_change.svg'), gfgamma, width=9, height=4)
+#wilcox.test(paired.psddf.on$pow_fast_gamma.fst, paired.psddf.on$pow_fast_gamma.snd, paired = TRUE)
+```
+
+```{r}
+my.paired.plot(paired.psddf.all, 'pow_above_theta')
+```
+
+```{r }
+gtheta.over.slow = my.paired.plot(paired.psddf.all, 'theta_over_slow') +
+  ylab('Ratio of theta over slower oscillations')
+gtheta.over.slow
+ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.slow, width=9, height=4)
+```
+

@@ -6,9 +6,9 @@ secondOffset = 2;
 %is_ymaze_trial = 0;
 %secondOffset = 0;
 
-animal_code = 'BS';
+animal_code = 'OS';
 laserOn = 0;
-date_str = '2019-11-13';
+trial_date = datetime('2019-11-12', 'InputFormat', 'yyyy-MM-dd');
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
@@ -16,10 +16,10 @@ reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.c
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 nexp = size(expstable, 1);
 daytable = expstable(...
-    strcmp(datestr(expstable.date, 'yyyy-mm-dd'), repmat({date_str}, nexp, 1)) &...
+    expstable.date >= trial_date & ...
     strcmp(expstable.animal, repmat({animal_code}, nexp, 1)) &...
     expstable.laserOn == laserOn & expstable.correct == 1, :);
-% daytable = expstable(...
+%daytable = expstable(...
 %     strcmp(expstable.animal, repmat({animal_code}, nexp, 1)) &...
 %     expstable.laserOn == laserOn & expstable.correct == 1, :);
 
@@ -87,6 +87,9 @@ for i = 1:size(daytable, 1)
         end
     end
 
+    %emgIdx = find(strcmp(channelTable.location, 'EMG'));
+    %keep_sample = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 0.2);
+    %dataArray = dataArray(:, keep_sample);
     for chan_i = 1:size(channelTable, 1)
         loc = channelTable.location(chan_i);
 
@@ -140,7 +143,7 @@ for i = 1:size(daytable, 1)
             ntrials = ntrials + ntrials_inc;
             periods_bandpower(:, (offset_i + 1):(offset_i + period_len)) = blockAvgSignal;
         end
-        band_zscored_trial = z_score(periods_bandpower);
+        band_zscored_trial = zscore(periods_bandpower);
         %band_zscored_trial = movmean(band_zscored_trial, 3, 2);
         band_zscore(chan_output_i, :, :) = ...
             squeeze(band_zscore(chan_output_i, :, :)) + band_zscored_trial;
@@ -193,13 +196,6 @@ function A = apply_ylim(A)
     minY = ones(size(A)) * -1;
     A = bsxfun(@min, A, maxY);
     A = bsxfun(@max, A, minY);
-end
-
-function A = z_score(cfs)
-    %cfs = log(cfs);
-    A = cfs - mean(cfs, 2);
-    A = bsxfun(@rdivide, A, std(A, [], 2));    
-    %A = movmean(A, 10, 2);
 end
 
 function [] = draw_vlines(xintercepts, ylim)

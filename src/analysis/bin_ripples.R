@@ -1,32 +1,37 @@
-bin.ripples = function(ripple.df, min_time, max_time, bin_dur = 5) {
-  ripple.df = ripple.df %>%
-    mutate(bin=ceiling(peak_t / bin_dur), bin_sec=bin * bin_dur - bin_dur/2)
+library(plyr)
+library(dplyr)
+library(purrr)
+  
+bin.ripples = function(ripple.df, bin_dur = 5) {
+  df = ripple.df %>%
+    dplyr::mutate(bin=ceiling(peak_t / bin_dur),
+                  nripples=1)
   if (nrow(ripple.df) == 0) {
     return(ripple.df)
   }
   
-  df = ripple.df %>% 
-    mutate(nripples=1)
-  
   max_bin = max(df$bin)
-  min_bin = min(df$bin)
-  nbins = max_bin - min_bin + 1
-  trials = unique(df$trial_id)
-  binned.template = data.frame(trial_id=rep(trials, each=nbins),
-                               bin=rep(min_bin:max_bin, length(trials)),
-                               nripples=rep(0, length(trials)))
-  binned.ripple.df = df %>%
-    right_join(binned.template, by=c('trial_id', 'bin')) %>%
-    mutate(trial_id2=trial_id) %>%
-    separate(trial_id2, c('cond', 'trial'), sep='_')
-  binned.ripple.df$cond = as.factor(binned.ripple.df$cond)
-  binned.ripple.df$trial = as.integer(binned.ripple.df$trial)
   
-  binned.ripple.df = binned.ripple.df %>%
-    group_by(trial_id, bin) %>%
-    summarise(nripples.total = sum(nripples.x, na.rm=TRUE) + sum(nripples.y, na.rm=TRUE),
-              incidence = nripples.total / bin_dur) %>%
-    mutate(bin_sec = bin * bin_dur - bin_dur/2)
+  df.stage.template = df %>%
+    dplyr::mutate(max.bin=max_bin) %>%
+    ddply(.(animal, date, state, trial_id, channelLocation, channelName), 
+          plyr::summarise,
+          bin=1:max.bin[1])
+  
+  df.template = map_df(levels(df$stage_desc), ~ dplyr::mutate(df.stage.template, stage_desc = .x))
+  df.template$stage_desc= as.factor(df.template$stage_desc)
+  df.template$stage_desc = factor(df.template$stage_desc, levels=c('before_stim','stim','after_stim'))
+  df.template = dplyr::mutate(df.template, laserOn=ifelse(stage_desc=='stim', 1, 0))
+    df.template$laserOn = as.factor(df.template$laserOn)
+  
+  binned.ripple.df = df %>%
+    right_join(df.template, by = c("animal", "date", "state", "channelName", "channelLocation", "trial_id", "stage_desc", "laserOn", "bin")) %>%
+    replace_na(list(nripples=0)) %>% 
+    dplyr::mutate(abs_bin = max_bin * (as.numeric(stage_desc) - 1) + bin) %>% 
+    dplyr::group_by(trial_id, abs_bin, laserOn, channelLocation) %>%
+    dplyr::summarise(nripples.total = sum(nripples, na.rm=TRUE),
+              incidence = nripples.total / bin_dur) %>% 
+    dplyr::mutate(bin_sec = abs_bin * bin_dur - bin_dur/2) 
   
   return(binned.ripple.df)
 }

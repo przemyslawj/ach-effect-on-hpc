@@ -9,7 +9,7 @@ fprintf('Processing file: %s\n', binName);
 showFiltered = 1;
 showDiode = 1;
 
-secondOffset = 0;
+secondOffset = 2;
 meta = ReadMeta(binName, path);
 
 animal_code = binName(1:2);

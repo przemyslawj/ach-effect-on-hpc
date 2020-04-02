@@ -66,7 +66,8 @@ for gi = 1:max(g)
                 std(channel_filtered(keep_sample_fewer));
         channel_signal = dataArray(channel_index, :);
         
-        peak_index = round(group_ripplestable.peak_t(i) * fs) + 1;
+        peak_index = round(group_ripplestable.abs_peak_t(i) * fs) + 1;
+        peak_offset_sec = group_ripplestable.abs_peak_t(i) - group_ripplestable.peak_t(i);
         halfwindow_len = int32(fs * 0.1);
         start_index = max(1, peak_index - halfwindow_len);
         end_index = min(peak_index + halfwindow_len, length(channel_filtered));
@@ -77,8 +78,8 @@ for gi = 1:max(g)
         %subplot(2 * ripple_slots, slot_w, slot_h);
         hAxFiltered(i) = subplot(nslots_h * 2, nslots_w, slot_i);
         plotSWR(time(indecies), channel_zscored_filtered(indecies), fs, ...
-            group_ripplestable.start_sec(i), ...
-            group_ripplestable.end_time(i));
+            group_ripplestable.start_sec(i) + peak_offset_sec, ...
+            group_ripplestable.end_time(i) + peak_offset_sec);
 
         ylim_val = 8;
         %ylim([-ylim_val ylim_val]);
@@ -93,7 +94,7 @@ for gi = 1:max(g)
     linkaxes(hAxFiltered,'y');
     
     if save_plots
-        fig_dir = fullfile(datarootdir, 'swrs', animal_code);
+        fig_dir = fullfile(datarootdir, 'swrs100_250', animal_code);
         if ~isfile(fig_dir)
             mkdir(fig_dir);
         end
