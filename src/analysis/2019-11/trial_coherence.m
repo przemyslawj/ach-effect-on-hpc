@@ -77,7 +77,7 @@ for i = 1:nexp
         
         trialPeriods = trialPeriods(~strcmp(trialPeriods.stage_desc, 'after_stim'), :);
         % assumes trials ordered
-        trialPeriods.trial_ordinal = (floor(1:0.5:(size(trialPeriods,1)/2 + 0.5)))';
+        trialPeriods.trial_ordinal = (repelem(1:(size(trialPeriods,1)/2), 1, 2))';
     else
         tracking_filepath = [ datarootdir filesep get_trackingfilepath(dateddir, binfile.name)];
         time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);

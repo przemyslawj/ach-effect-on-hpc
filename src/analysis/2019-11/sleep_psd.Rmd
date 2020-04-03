@@ -112,7 +112,7 @@ axis.labels[19]=100
 
 animal.psd.ratio %>%
   ggplot() +
-  geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean)) + 
+  geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean, color=animal)) + 
   #geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
   #            alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
@@ -150,19 +150,19 @@ channel.psd.ratio %>%
   theme(legend.position = 'none')
 ```
 ```{r}
-daily.psd = psd.molten %>%
-  group_by(channelLocation, laserOn, stage_desc, band_start_freq) %>%
+animal.psd = psd.molten %>%
+  group_by(channelLocation, animal, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.power = mean(log(band_power)),
                    sem.power = sem(log(band_power)))
 
-daily.psd %>%
+animal.psd %>%
   filter(stage_desc %in% c('stim', 'before_stim')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, y=mean.power, group=laserOn, color=laserOn), size=2*px2pt) +
   geom_ribbon(aes(x=band_start_freq, y=mean.power, group=laserOn, ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-15, ymax=-8, alpha=0.05, fill='grey10') +
-  facet_grid(. ~ channelLocation) +
+  facet_grid(animal ~ channelLocation) +
   scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
   gtheme +
   xlab('Frequency (Hz)') + ylab('Power (log)')
@@ -507,29 +507,24 @@ wcoh.molten = melt.freq.bands(wcoh.df, extra.id.vars = c(), psd.vars.prefix='all
 
 ```{r}
 animal.wcoh.df = wcoh.molten %>%
-  dplyr::group_by(animal, band_name, band_start_freq) %>%
-  dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
-                   ratio.sem=sem(power.ratio.change))
-  
-axis.breaks=c(1:9,seq(10,100,10))
-axis.labels=rep('', length(axis.breaks))
-axis.labels[1]=1
-axis.labels[10]=10
-axis.labels[19]=100
+  dplyr::group_by(animal, band_name, band_start_freq, laserOn) %>%
+  dplyr::summarise(power.mean=mean(band_power, na.rm=TRUE),
+                   power.sem=sem(band_power))
 
-animal.psd.ratio %>%
+animal.wcoh.df %>%
+  dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
   ggplot() +
-  geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean)) + 
-  #geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
-  #            alpha=0.1) +
+  geom_line(aes(x=band_start_freq, group=animal_laser, y=power.mean, color=laserOn)) + 
+  geom_ribbon(aes(x=band_start_freq, group=animal_laser, ymin=power.mean-power.sem, ymax=power.mean+power.sem),
+              alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
   scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
-  geom_hline(yintercept=1, linetype='dashed') +
-  facet_grid(. ~ channelLocation) +
   xlab('Frequency (Hz)') +
-  ylab('LFP power ratio') +
+  ylab('Coherence') +
+  facet_wrap(animal ~ ., ncol = 2) +
   gtheme +
   theme(legend.position = 'top')
 ```
-
+TODO:
+[] Higher coherence in 50-70 Hz? - but this could be just noise.
