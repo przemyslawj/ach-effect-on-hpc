@@ -6,9 +6,9 @@ secondOffset = 2;
 %is_ymaze_trial = 0;
 %secondOffset = 0;
 
-animal_code = 'OS';
+animal_code = 'PT';
 laserOn = 0;
-trial_date = datetime('2019-11-12', 'InputFormat', 'yyyy-MM-dd');
+trial_date = datetime('2019-11-13', 'InputFormat', 'yyyy-MM-dd');
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
@@ -36,7 +36,9 @@ trial_period_lengths = [10 20 50 50];
 band_zscore = zeros(2, numel(all_bands)-1, sum(trial_period_lengths));
 % Count of trials: trial period x common timestamp
 ntrials = zeros(1, sum(trial_period_lengths));
-%daytable = daytable(1:2,:);
+
+band_coherence = zeros(numel(all_bands)-1, sum(trial_period_lengths));
+
 
 channelLocs = {'CA1', 'CA3'};
 %% process single experiments
@@ -87,6 +89,20 @@ for i = 1:size(daytable, 1)
         end
     end
 
+    % Calculate coherence for the predefined frequencies
+    ca_channels = find(startsWith(channelTable.location, 'CA'));
+    signal_pair = dataArray(ca_channels, :);
+    [wcoh, wcs, freqs] = wcoherence(signal_pair(1,:), signal_pair(2,:), fs);
+    freqs = fliplr(freqs')';
+    wcoh = fliplr(wcoh')';
+    band_coh = zeros(numel(all_bands)-1, size(wcoh, 2));
+    for j=1:(numel(all_bands)-1)
+        % Assign power of the first higher frequency
+        k = find(freqs >= all_bands(j), 1, 'first');
+        band_coh(j,:) = wcoh(k, :);
+    end
+    periods_coherence = zeros(size(band_coherence, 1), size(band_coherence, 2));
+        
     %emgIdx = find(strcmp(channelTable.location, 'EMG'));
     %keep_sample = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 0.2);
     %dataArray = dataArray(:, keep_sample);
@@ -114,7 +130,6 @@ for i = 1:size(daytable, 1)
         
         periods_bandpower = zeros(size(band_zscore, 2), size(band_zscore, 3));
         for trial_period_i = 1:size(trialPeriods, 1)
-            % Spectrogram signal
             start_index = max(1, trialPeriods.starts(trial_period_i));
             end_index = min(trialPeriods.ends(trial_period_i), size(dataArray,2));
             if end_index - start_index < 0
@@ -124,33 +139,29 @@ for i = 1:size(daytable, 1)
             trial_period_offsets = cumsum([0 trial_period_lengths]);
             offset_i = trial_period_offsets(trial_period_i);
             period_len = trial_period_lengths(trial_period_i);
-            ntrials_inc = zeros(1, size(ntrials, 2));
+           
             period_pxx = band_power(:, start_index:end_index);
-            % Compress the trial period length
-            if size(period_pxx, 2) > period_len
-                blockSize = [1, floor(size(period_pxx, 2) / period_len)];
-                meanFilterFun = @(blockStruct) mean2(blockStruct.data(:));
-                blockAvgSignal = blockproc(period_pxx, blockSize, meanFilterFun);
-                blockAvgSignal = blockAvgSignal(:,1:period_len);
-                ntrials_inc((offset_i + 1):(offset_i + period_len)) = 1;
-            else % Keep the trial period length
-                blockAvgSignal = zeros(size(period_pxx, 1), period_len);
-                nsamples = size(period_pxx,2);
-                blockAvgSignal(:,1:nsamples) = period_pxx;
-                
-                ntrials_inc((offset_i + 1):(offset_i + nsamples)) = 1;
-            end
-            ntrials = ntrials + ntrials_inc;
-            periods_bandpower(:, (offset_i + 1):(offset_i + period_len)) = blockAvgSignal;
+            period_indecies = (offset_i + 1):(offset_i + period_len);
+            periods_bandpower(:, period_indecies) = ...
+                matScale(period_pxx, period_len);
+            
+            period_coh = band_coh(:, start_index:end_index);
+            periods_coherence(:, period_indecies) = ...
+                matScale(period_coh, period_len);
+            
+            ntrials(period_indecies) = ntrials(period_indecies) + 1;
         end
         band_zscored_trial = zscore(periods_bandpower);
         %band_zscored_trial = movmean(band_zscored_trial, 3, 2);
         band_zscore(chan_output_i, :, :) = ...
             squeeze(band_zscore(chan_output_i, :, :)) + band_zscored_trial;
+        
     end
+    band_coherence = band_coherence + periods_coherence;
 end
 
 %% Plot spectrograms
+xintercepts = [1 cumsum(trial_period_lengths)];
 for chan_i = [1 2]
     f = figure('name', ['Channel=' channelLocs{chan_i} ],...
                'Position', [400 700 800 300]);
@@ -158,10 +169,36 @@ for chan_i = [1 2]
         squeeze((ntrials / 2)); % Each trial counted twice: once per channel
     %zscore_mean = movmean(zscore_mean, 5, 2);
     zscore_mean = apply_ylim(zscore_mean);
-    xintercepts = [1 cumsum(trial_period_lengths)];
     plotSpectrogram(zscore_mean, 1:sum(trial_period_lengths), ...
         all_bands(2:end), xintercepts);
     saveas(f, ['/home/prez/tmp/ymaze_chat_x_ai32/ymaze_spect' channelLocs{chan_i} '.svg'])
+end
+
+%% Plot coherence
+% Each trial counted twice: once per channel
+scaled_band_coherence = band_coherence ./ (ntrials / 2);
+f = figure('name', 'Wavelet Coherence',...
+           'Position', [400 700 800 300]);
+plotSpectrogram(scaled_band_coherence, 1:sum(trial_period_lengths), ...
+    all_bands(2:end), xintercepts);
+ax = gca;
+hcol = colorbar;
+hcol.Label.String = 'Coherence';
+saveas(f, ['/home/prez/tmp/ymaze_chat_x_ai32/ymaze_coherence_laser' num2str(laserOn) '.svg'])
+
+%% Utilify functions
+function [scaledM] = matScale(M, required_width)
+    % Stretch the trial period length
+    mwidth = size(M, 2);
+    if mwidth < required_width
+        M = repelem(M, 1, ceil(required_width / mwidth));
+    end
+
+    % Compress the trial period
+    blockSize = [1, floor(mwidth / required_width)];
+    meanFilterFun = @(blockStruct) mean2(blockStruct.data(:));
+    scaledM = blockproc(M, blockSize, meanFilterFun);
+    scaledM = scaledM(:, 1:required_width);
 end
 
 function [] = plotSpectrogram(wt_pow, time, wfreqs, xintercepts)

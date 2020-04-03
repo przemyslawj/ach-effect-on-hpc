@@ -304,15 +304,10 @@ function [ pow ] = TotalBandPower(f1, pxx, band)
     pow = bandpower(pxx,f1,band,'psd');
 end
 
-function [ pow ] = MeanBandPower2(f1, pxx, band)
-    pow = TotalBandPower(f1, pxx, band);
-    pow = mean(pow, 2);
-end
-
 function [ pow ] = CalcBandPower(fs, signal, band)
     pow = bandpower(signal, fs, band);
     %band_freqs = find(f1 >= band(1) & f1 <= band(2));
-    %pow = trapz(f1(band_freqs), pxx(band_freqs)) / abs(band_freqs(2) - band_freqs(1));
+    %pow = trapz(f1(band_freqs), pxx(band_freqs)) / abs(band(2) - band(1));
 end
 
 function [ pow ] = TotalBandPower2(f1, pxx, band)
@@ -329,18 +324,3 @@ function [ freq ] = PeakFreq(f1, pxx, band)
     freq = freqs(maxValIndex);
 end
 
-function [ trialPeriods ] = extractTrialPeriodsFromLaser(...
-    downsampledDataArray, laserChannelIdx, downfs)
-    lasertrial_duration_sec = 20;
-    laserPeriods = [];
-    if laserChannelIdx > 0
-        laserSignal = downsampledDataArray(laserChannelIdx, :);
-        laserPeriods = findLaserPeriods(laserSignal, downfs * 0.2);
-    end
-    
-    trialPeriods = [];
-    if ~isempty(laserPeriods)
-        trialPeriods = createTrialPeriodsFromLaser(laserPeriods, ...
-            downfs * lasertrial_duration_sec);
-    end
-end

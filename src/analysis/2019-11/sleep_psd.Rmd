@@ -69,7 +69,6 @@ if (diode.signal) {
 psddf$animal = as.factor(psddf$animal)
 psddf$channel = as.factor(psddf$channel)
 psddf$laserOn = as.factor(psddf$laserOn)
-psddf$state = as.factor(psddf$state)
 
 psddf = psddf %>%
   dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
@@ -490,5 +489,47 @@ gtheta.over.slow = my.paired.plot(paired.psddf.all, 'theta_over_slow') +
   ylab('Ratio of theta over slower oscillations')
 gtheta.over.slow
 ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.slow, width=9, height=4)
+```
+# Coherence
+```{r}
+wcoh.df = read_csv(paste(data_dir, 'coherence_table.csv', sep='/'))
+wcoh.df$animal = as.factor(wcoh.df$animal)
+wcoh.df$laserOn = as.factor(wcoh.df$laserOn)
+wcoh.df = wcoh.df %>%
+  dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
+wcoh.df$trial_id = as.factor(wcoh.df$trial_id)
+wcoh.df$channelLocation = 'CA1-CA3'
+```
+
+```{r}
+wcoh.molten = melt.freq.bands(wcoh.df, extra.id.vars = c(), psd.vars.prefix='all_coh_')
+```
+
+```{r}
+animal.wcoh.df = wcoh.molten %>%
+  dplyr::group_by(animal, band_name, band_start_freq) %>%
+  dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
+                   ratio.sem=sem(power.ratio.change))
+  
+axis.breaks=c(1:9,seq(10,100,10))
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+
+animal.psd.ratio %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean)) + 
+  #geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
+  #            alpha=0.1) +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept=1, linetype='dashed') +
+  facet_grid(. ~ channelLocation) +
+  xlab('Frequency (Hz)') +
+  ylab('LFP power ratio') +
+  gtheme +
+  theme(legend.position = 'top')
 ```
 
