@@ -1,11 +1,11 @@
 is_ymaze_trial = 1;
-animal_code = 'all';
+animal = 'all';
 
 if is_ymaze_trial
     datarootdir = '/mnt/DATA/chat_ripples/y-maze';
     secondOffset = 2.5;
     trial_date = datetime('2019-11-13', 'InputFormat', 'yyyy-MM-dd');
-    laserOn = 1;
+    laserOn = 0;
 else
     datarootdir = '/mnt/DATA/chat_ripples/baseline';
     secondOffset = 0;
@@ -26,7 +26,7 @@ if is_ymaze_trial
             %strcmp(expstable.animal, repmat({animal_code}, nexp, 1)) &...
 else
     daytable = expstable(...
-         strcmp(expstable.animal, repmat({animal_code}, nexp, 1)), :);
+         strcmp(expstable.animal, repmat({animal}, nexp, 1)), :);
     %daytable = expstable;
 end
 
@@ -34,7 +34,7 @@ result_table = table();
 
 all_ripples = table();
 
-all_bands = exp(0.7:0.05:5.55);
+all_bands = exp(0.1:0.07:5.6);
 
 if is_ymaze_trial
     trial_period_lengths = [10 20 50 50];
@@ -214,7 +214,7 @@ file_prefix = 'sleep_';
 if is_ymaze_trial
     file_prefix = 'ymaze_';
 end
-file_prefix = [file_prefix animal_code '_'];
+file_prefix = [file_prefix animal '_'];
 
 for chan_i = [1 2]
     f = figure('name', ['Channel=' channelLocs{chan_i} ],...

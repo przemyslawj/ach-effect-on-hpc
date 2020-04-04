@@ -1,5 +1,5 @@
 
-bands = c(exp(seq(0.1, 5.35, by=0.07)))
+bands = c(exp(seq(0.1, 5.6, by=0.07)))
 
 melt.freq.bands = function(df, extra.id.vars=c('learning_day', 'dirname'), psd.vars.prefix='all_psd_xx_') {
   default.id.vars = c('animal', 'date', 'trial_id', 'channelLocation','laserOn', 'stage_desc')

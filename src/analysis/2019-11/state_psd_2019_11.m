@@ -5,16 +5,16 @@
 
 %% setup results
 ripple_std_thr = 6;
-use_diode = 1;
+use_diode = 0;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
-datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-is_ymaze_trial = 1;
-secondOffset = 3;
-%datarootdir = '/mnt/DATA/chat_ripples/baseline';
-%is_ymaze_trial = 0;
-%secondOffset = 0;
+%datarootdir = '/mnt/DATA/chat_ripples/y-maze';
+%is_ymaze_trial = 1;
+%secondOffset = 3;
+datarootdir = '/mnt/DATA/chat_ripples/baseline';
+is_ymaze_trial = 0;
+secondOffset = 0;
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
@@ -28,7 +28,7 @@ result_table = table();
 all_ripples = table();
 
 % Predefined frequencies
-all_bands = exp(0.1:0.07:5.35);
+all_bands = exp(0.1:0.07:5.6);
 min_section_dur_sec = 0.5;
 
 %% process single experiments
@@ -67,21 +67,19 @@ for i = 1:nexp
     nchans = size(dataArray, 1);
 
     %dataArray = filter50Hz(dataArray, fs);
-    downfs = 625;
-    downsampledDataArray = downsample(dataArray', round(fs / downfs))';
 
     laserChannelIdx = find(strcmp(channelTable.location, 'Laser'));
     emgIdx = find(strcmp(channelTable.location, 'EMG'));
     if is_ymaze_trial == 0
-        trialPeriods = extractTrialPeriodsFromLaser(downsampledDataArray,...
-            laserChannelIdx, downfs);
+        trialPeriods = extractTrialPeriodsFromLaser(dataArray,...
+            laserChannelIdx, fs);
     else
         tracking_filepath = [ datarootdir filesep get_trackingfilepath(dateddir, binfile.name)];
         time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
         if ~isempty(time_mouse_arrived)
-            trialPeriods = createYmazeTrialPeriods(downsampledDataArray,...
+            trialPeriods = createYmazeTrialPeriods(dataArray,...
                                                    time_mouse_arrived,...
-                                                   downfs);
+                                                   fs);
             trialPeriods.laserOn = repmat(expstable.laserOn(i), size(trialPeriods,1), 1);
         else 
             trialPeriods = [];
@@ -91,7 +89,7 @@ for i = 1:nexp
     if is_after_ymaze
         trialPeriods = table();
         trialPeriods.starts = 0;
-        trialPeriods.ends = int32(str2double(meta.fileTimeSecs) * downfs);
+        trialPeriods.ends = int32(str2double(meta.fileTimeSecs) * fs);
         trialPeriods.laserOn = expstable.laserOn(i);
         trialPeriods.stage_desc = {'after'};
     end
@@ -168,9 +166,9 @@ for i = 1:nexp
             ripples = ripples(keep_ripples,:);
         end
         
-        %[pxx, freqs] = pwelch(downsampledDataArray, ...
-        %    floor(downfs / 4), floor(downfs / 8), floor(downfs / 2), downfs);
-        [cws, freqs] = cwt(downsampledDataArray(channel,:), 'amor', downfs);        
+        %[pxx, freqs] = pwelch(dataArray, ...
+        %    floor(fs / 4), floor(fs / 8), floor(fs / 2), fs);
+        [cws, freqs] = cwt(dataArray(channel,:), 'amor', fs);        
         signal_pxx = abs(cws .^ 2);
         freqs = fliplr(freqs')';
         signal_pxx = fliplr(signal_pxx')';
@@ -187,13 +185,13 @@ for i = 1:nexp
         
         for trial_period_i = 1:size(trialPeriods, 1)
             period_start = max(1, int32(trialPeriods.starts(trial_period_i)));
-            period_end = min( size(downsampledDataArray, 2), ...
+            period_end = min( size(dataArray, 2), ...
                               int32(trialPeriods.ends(trial_period_i)));
-            period_signal = downsampledDataArray(channel, period_start : period_end);
+            period_signal = dataArray(channel, period_start : period_end);
             period_pxx = signal_pxx(:, period_start : period_end);
-            sec_start = max(0, double(period_start) / downfs);
-            sec_end = double(period_end) / downfs;
-            %sec_end = min(sec_end,  size(downsampledDataArray, 2) / downfs);
+            sec_start = max(0, double(period_start) / fs);
+            sec_end = double(period_end) / fs;
+            %sec_end = min(sec_end,  size(dataArray, 2) / fs);
             sec_length = sec_end - sec_start;
 
             if sec_length <= min_section_dur_sec
@@ -218,21 +216,21 @@ for i = 1:nexp
             result_table.dom_freq(entry_i) = PeakFreq(freqs, period_pxx, [slow_adjusted(1), 45]);
 
             %result_table.pow_slow(entry_i) = MeanBandPower(freqs, period_pxx, slow_adjusted);
-            result_table.pow_slow(entry_i) = CalcBandPower(downfs, period_signal, slow_adjusted);
+            result_table.pow_slow(entry_i) = CalcBandPower(fs, period_signal, slow_adjusted);
             %result_table.pow_theta(entry_i) = MeanBandPower(freqs, period_pxx, theta);
-            result_table.pow_theta(entry_i) = CalcBandPower(downfs, period_signal, theta);
+            result_table.pow_theta(entry_i) = CalcBandPower(fs, period_signal, theta);
             result_table.peak_theta(entry_i) = PeakFreq(freqs, period_pxx, theta);
             %result_table.pow_slow_gamma(entry_i) = MeanBandPower(freqs, period_pxx, slow_gamma);
-            result_table.pow_slow_gamma(entry_i) = CalcBandPower(downfs, period_signal, slow_gamma);
+            result_table.pow_slow_gamma(entry_i) = CalcBandPower(fs, period_signal, slow_gamma);
             result_table.peak_slow_gamma(entry_i) = PeakFreq(freqs, period_pxx, slow_gamma);
             %result_table.pow_med_gamma(entry_i) = MeanBandPower(freqs, period_pxx, med_gamma);
-            result_table.pow_med_gamma(entry_i) = CalcBandPower(downfs, period_signal, med_gamma);
+            result_table.pow_med_gamma(entry_i) = CalcBandPower(fs, period_signal, med_gamma);
             %result_table.pow_fast_gamma(entry_i) = MeanBandPower(freqs, period_pxx, fast_gamma);
-            result_table.pow_fast_gamma(entry_i) = CalcBandPower(downfs, period_signal, fast_gamma);
+            result_table.pow_fast_gamma(entry_i) = CalcBandPower(fs, period_signal, fast_gamma);
             %result_table.pow_above_theta(entry_i) = MeanBandPower(freqs, period_pxx, above_theta);
-            result_table.pow_above_theta(entry_i) = CalcBandPower(downfs, period_signal, above_theta);
+            result_table.pow_above_theta(entry_i) = CalcBandPower(fs, period_signal, above_theta);
             %result_table.pow_ripple_band(entry_i) = MeanBandPower(freqs, period_pxx, ripple_band);
-            result_table.pow_ripple_band(entry_i) = CalcBandPower(downfs, period_signal, ripple_band);
+            result_table.pow_ripple_band(entry_i) = CalcBandPower(fs, period_signal, ripple_band);
             for j=1:(numel(all_bands)-1)
                 result_table.all_psd_xx(entry_i, j) = ...
                     mean(band_power(j, period_start : period_end));

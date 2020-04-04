@@ -117,7 +117,7 @@ animal.psd.ratio %>%
   #            alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
   facet_grid(. ~ channelLocation) +
   xlab('Frequency (Hz)') +
@@ -127,6 +127,7 @@ animal.psd.ratio %>%
 ```
 
 
+TODO should sample the same number of trials per animal
 ```{r}
 
 channel.psd.ratio = psd.ratio.df %>%
@@ -141,7 +142,7 @@ channel.psd.ratio %>%
               alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
   facet_grid(. ~ channelLocation) +
   xlab('Frequency (Hz)') +
@@ -163,7 +164,7 @@ animal.psd %>%
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-15, ymax=-8, alpha=0.05, fill='grey10') +
   facet_grid(animal ~ channelLocation) +
-  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   gtheme +
   xlab('Frequency (Hz)') + ylab('Power (log)')
 ```
@@ -183,7 +184,7 @@ psd.ratio.df %>%
             size=0.5 * px2pt) + 
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
   facet_grid(animal ~ channelLocation) +
   xlab('Frequency (Hz)') +
@@ -519,7 +520,7 @@ animal.wcoh.df %>%
               alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   xlab('Frequency (Hz)') +
   ylab('Coherence') +
   facet_wrap(animal ~ ., ncol = 2) +
@@ -528,7 +529,7 @@ animal.wcoh.df %>%
 ```
 Coherence not changed by the laser.
 ```{r}
-m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=wcoh.df, REML = TRUE) 
+m.full = lmerTest::lmer(log(coh_theta) ~ laserOn + (1 + laserOn | animal), data=wcoh.df, REML = TRUE) 
 summary(m.full)
 plot.model.diagnostics(m.full, wcoh.df$animal, wcoh.df$laserOn)
 coef(m.full)$animal

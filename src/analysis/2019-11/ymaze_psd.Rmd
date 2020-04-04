@@ -18,7 +18,7 @@ source('psd_analysis.R')
 
 ```{r}
 data_dir =  '/mnt/DATA/chat_ripples/y-maze'
-diode.signal = TRUE
+diode.signal = FALSE
 if (diode.signal) {
   psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
 } else {
@@ -71,7 +71,7 @@ band.zscore %>%
   ggplot(aes(x=band_start_freq, y=band.zscore, group=trial_stage, color=stage_desc)) +
   geom_line(size=0.5*px2pt)  +
   facet_grid(laserOn ~ channelLocation) +
-  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme
 ```
@@ -83,7 +83,7 @@ daily.band.zscore = band.zscore %>%
                    sem.zscore = sem(band.zscore))
 
 daily.band.zscore %>%
-  filter(laserOn == 0) %>%
+  #filter(laserOn == 0) %>%
   #filter(animal == 'BS') %>%
   filter(learning_day == 6)  %>%
   filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
@@ -92,8 +92,8 @@ daily.band.zscore %>%
   ggplot(aes(x=band_start_freq, y=mean.zscore, group=stage_desc)) +
   geom_line(aes(color=stage_desc), size=2*px2pt) +
   geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
-  facet_grid(. ~ channelLocation) +
-  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  facet_grid(laserOn ~ channelLocation) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme +
   xlab('Frequency (Hz)') +
@@ -109,7 +109,7 @@ daily.band.zscore %>%
   geom_line(aes(color=laserOn), size=1*px2pt) +
   #geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
   facet_grid(. ~ channelLocation) +
-  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme
 ```
@@ -130,7 +130,7 @@ animal.psd %>%
   geom_line(aes(color=stage_desc), size=2*px2pt) +
   geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
   facet_grid(animal ~ channelLocation) +
-  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme +
   xlab('Frequency (Hz)') +
@@ -157,7 +157,7 @@ animal.psd %>%
   geom_line(aes(color=laserOn), size=1*px2pt) +
   geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
   facet_grid(animal ~ channelLocation) +
-  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   #geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme +
   xlab('Frequency (Hz)') + ylab('Power (log)')
@@ -203,8 +203,8 @@ animal.stage.wcoh.df = wcoh.molten %>%
                    power.sem=sem(band_power))
 
 animal.stage.wcoh.df %>%
-  filter(stage_desc == 'StimLast10sec') %>%
-  #filter(stage_desc == 'GoalZone20sec') %>%
+  #filter(stage_desc == 'StimLast10sec') %>%
+  filter(stage_desc == 'GoalZone20sec') %>%
   dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, group=animal_laser, y=power.mean, color=laserOn)) + 
@@ -212,7 +212,7 @@ animal.stage.wcoh.df %>%
               alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,150), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   xlab('Frequency (Hz)') +
   ylab('Coherence') +
   facet_wrap(animal ~ ., ncol = 2) +
@@ -220,10 +220,15 @@ animal.stage.wcoh.df %>%
   theme(legend.position = 'top')
 ```
 
-Laser increased coherence in the ripple band...
+Laser decreased coherence in the ripple band for all days, not signif
 What about just the epochs of ripples in the CA3?
 ```{r}
-subset.wcoh.df = filter(wcoh.df, stage_desc == 'GoalZone20sec')
+subset.wcoh.df = wcoh.df %>%
+  left_join(dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+            by=c('date', 'animal', 'file_name')) %>%
+  filter(stage_desc == 'GoalZone20sec',
+         correct == 1,
+         learning_day >= 5)
 m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE) 
 summary(m.full)
 plot.model.diagnostics(m.full, subset.wcoh.df$animal, subset.wcoh.df$laserOn)
@@ -232,10 +237,11 @@ anova(m.full, refit=FALSE, ddf='Satterthwaite')
 ```
 Create ratio of coherence and plot for each animal?
 ```{r}
-
+wcoh.summary = group_by()
 ```
 
 
 TODO:
 [] check coherence in ripple band during the epochs with ripples in CA3. 
-[] Plot coherence in bands up to 250 Hz.
+[] curiosity: what is the phase of theta between CA3 and CA1
+[x] Plot coherence in bands up to 250 Hz.

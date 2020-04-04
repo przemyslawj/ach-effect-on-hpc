@@ -27,7 +27,7 @@ result_table = table();
 all_ripples = table();
 
 % Predefined frequencies
-all_bands = exp(0.1:0.07:5.35);
+all_bands = exp(0.1:0.07:5.6);
 min_section_dur_sec = 0.5;
 
 %% process single experiments
