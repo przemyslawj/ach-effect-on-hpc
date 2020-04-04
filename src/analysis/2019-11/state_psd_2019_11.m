@@ -4,7 +4,7 @@
 % - how to choose electrodes?
 
 %% setup results
-ripple_std_thr = 5;
+ripple_std_thr = 6;
 use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;

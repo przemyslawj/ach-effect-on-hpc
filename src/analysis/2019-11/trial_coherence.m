@@ -8,12 +8,12 @@ use_diode = 0;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
-datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-is_ymaze_trial = 1;
-secondOffset = 3;
-%datarootdir = '/mnt/DATA/chat_ripples/baseline';
-%is_ymaze_trial = 0;
-%secondOffset = 0;
+%datarootdir = '/mnt/DATA/chat_ripples/y-maze';
+%is_ymaze_trial = 1;
+%secondOffset = 2.5;
+datarootdir = '/mnt/DATA/chat_ripples/baseline';
+is_ymaze_trial = 0;
+secondOffset = 0;
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
@@ -145,21 +145,22 @@ for i = 1:nexp
     for trial_ordinal = (unique(trialPeriods.trial_ordinal))'
         trialSections = trialPeriods(trialPeriods.trial_ordinal == trial_ordinal, :);
         
-        section_start = max(1, min(trialSections.starts));
-        section_end = min(max(trialSections.ends), size(downsampledDataArray,2));
-        section_signal = signal_pair(:, section_start : section_end);
+        trial_start = max(1, min(trialSections.starts));
+        trial_end = min(max(trialSections.ends), size(downsampledDataArray,2));
+        trial_signal = signal_pair(:, trial_start : trial_end);
+        keep_trial_sample = intersect(...
+            excludeEMGNoisePeriods(trial_signal(ca_channels(1),:), fs * 0.2, 3),...
+            excludeEMGNoisePeriods(trial_signal(ca_channels(2),:), fs * 0.2, 3));
 
-        sec_start = max(0, double(section_start) / downfs);
-        sec_end = double(section_end) / downfs;
+        sec_start = max(0, double(trial_start) / downfs);
+        sec_end = double(trial_end) / downfs;
         sec_length = sec_end - sec_start;
 
         if sec_length <= min_section_dur_sec
             continue
         end
-        
-        %wcoherence(section_signal(1,:), section_signal(2,:), downfs);
-        %waitforbuttonpress
-        [wcoh, wcs, freqs] = wcoherence(section_signal(1,:), section_signal(2,:), downfs);
+
+        [wcoh, wcs, freqs] = wcoherence(trial_signal(1,:), trial_signal(2,:), downfs);
         freqs = fliplr(freqs')';
         wcoh = fliplr(wcoh')';
                
@@ -170,11 +171,25 @@ for i = 1:nexp
             band_coh(j,:) = wcoh(k, :);
         end
         
-        for period_i = 1:size(trialSections,1)
-            period_start_i = max(1, trialSections.starts(period_i) - section_start + 1);
-            period_end_i = min(trialSections.ends(period_i) - section_start + 1,...
+        for section_i = 1:size(trialSections,1)
+            section_start_i = max(1, trialSections.starts(section_i) - trial_start + 1);
+            section_end_i = min(trialSections.ends(section_i) - trial_start + 1,...
                                size(wcoh,2));
-            period_wcoh = wcoh(:, period_start_i:period_end_i);
+            section_indecies = section_start_i:section_end_i;
+            keep_section_samples = intersect(section_indecies, keep_trial_sample);
+
+            if numel(keep_section_samples) < numel(section_indecies)
+                nrejected_indecies = numel(section_indecies) - numel(keep_section_samples);
+                warning(['Rejected ' num2str(nrejected_indecies / fs) ' s out of '...
+                    num2str(numel(section_indecies) / fs) ' s due to noise'])
+            end
+
+            if numel(keep_section_samples) < 0.2 * fs
+                warning(['Section ' num2str(section_i) ' too short, skippnig'])
+                continue
+            end                           
+                           
+            section_wcoh = wcoh(:, keep_section_samples);
             
             warning('off', 'MATLAB:table:RowsAddedExistingVars');
             result_table.date(entry_i) = {dateddir};
@@ -182,20 +197,20 @@ for i = 1:nexp
             result_table.file_name(entry_i) = expstable.dirname(i);
             trial = [expstable.dirname{i} '_' num2str(trial_ordinal)];
             result_table.trial(entry_i) = {trial};
-            result_table.stage_desc(entry_i) = trialSections.stage_desc(period_i);
-            result_table.laserOn(entry_i) = trialSections.laserOn(period_i);
+            result_table.stage_desc(entry_i) = trialSections.stage_desc(section_i);
+            result_table.laserOn(entry_i) = trialSections.laserOn(section_i);
             
-            result_table.coh_slow(entry_i) = CoherenceMean(freqs, period_wcoh, slow);
-            result_table.coh_theta(entry_i) = CoherenceMean(freqs, period_wcoh, theta);
-            result_table.coh_slow_gamma(entry_i) = CoherenceMean(freqs, period_wcoh, slow_gamma);
-            result_table.coh_med_gamma(entry_i) = CoherenceMean(freqs, period_wcoh, med_gamma);
-            result_table.coh_fast_gamma(entry_i) = CoherenceMean(freqs, period_wcoh, fast_gamma);
-            result_table.coh_above_theta(entry_i) = CoherenceMean(freqs, period_wcoh, above_theta);
-            result_table.coh_ripple_band(entry_i) = CoherenceMean(freqs, period_wcoh, ripple_band);
+            result_table.coh_slow(entry_i) = CoherenceMean(freqs, section_wcoh, slow);
+            result_table.coh_theta(entry_i) = CoherenceMean(freqs, section_wcoh, theta);
+            result_table.coh_slow_gamma(entry_i) = CoherenceMean(freqs, section_wcoh, slow_gamma);
+            result_table.coh_med_gamma(entry_i) = CoherenceMean(freqs, section_wcoh, med_gamma);
+            result_table.coh_fast_gamma(entry_i) = CoherenceMean(freqs, section_wcoh, fast_gamma);
+            result_table.coh_above_theta(entry_i) = CoherenceMean(freqs, section_wcoh, above_theta);
+            result_table.coh_ripple_band(entry_i) = CoherenceMean(freqs, section_wcoh, ripple_band);
             
             for j=1:(numel(all_bands)-1)
                 result_table.all_coh(entry_i, j) = ...
-                    mean(wcoh(j, period_start_i:period_end_i));
+                    mean(wcoh(j, keep_section_samples));
             end
             
             entry_i = entry_i + 1;

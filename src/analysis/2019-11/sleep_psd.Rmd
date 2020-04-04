@@ -173,7 +173,7 @@ animal.psd %>%
 ```{r}
 sampled.trials = group_by(psd.ratio.df, animal) %>%
   select(trial_id) %>%
-  sample_n(2) %>%
+  sample_n(10, replace = TRUE) %>%
   ungroup()
 
 psd.ratio.df %>%
@@ -181,11 +181,11 @@ psd.ratio.df %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, group=trial_id, y=power.ratio.change, colour=animal),
             size=0.5 * px2pt) + 
-  #geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
-  #          ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
   scale_x_log10(limits=c(1,200), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
-  facet_grid(. ~ channelLocation) +
+  facet_grid(animal ~ channelLocation) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
   gtheme +
@@ -526,5 +526,14 @@ animal.wcoh.df %>%
   gtheme +
   theme(legend.position = 'top')
 ```
-TODO:
-[] Higher coherence in 50-70 Hz? - but this could be just noise.
+Coherence not changed by the laser.
+```{r}
+m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=wcoh.df, REML = TRUE) 
+summary(m.full)
+plot.model.diagnostics(m.full, wcoh.df$animal, wcoh.df$laserOn)
+coef(m.full)$animal
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+```
+
+
+

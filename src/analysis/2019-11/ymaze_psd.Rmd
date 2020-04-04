@@ -32,6 +32,12 @@ trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
 
 psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
                         by=c('date', 'animal', 'file_name'))
+
+freq.bands.df = data.frame(
+  band=c('theta', 'slow gamma', 'fast gamma'),
+  xmin=c(5, 25, 80),
+  xmax=c(9, 45, 150)
+)
 ```
 
 # Effect of the task stage
@@ -197,7 +203,8 @@ animal.stage.wcoh.df = wcoh.molten %>%
                    power.sem=sem(band_power))
 
 animal.stage.wcoh.df %>%
-  filter(stage_desc == 'GoalZone20sec') %>%
+  filter(stage_desc == 'StimLast10sec') %>%
+  #filter(stage_desc == 'GoalZone20sec') %>%
   dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, group=animal_laser, y=power.mean, color=laserOn)) + 
@@ -212,5 +219,23 @@ animal.stage.wcoh.df %>%
   gtheme +
   theme(legend.position = 'top')
 ```
+
+Laser increased coherence in the ripple band...
+What about just the epochs of ripples in the CA3?
+```{r}
+subset.wcoh.df = filter(wcoh.df, stage_desc == 'GoalZone20sec')
+m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE) 
+summary(m.full)
+plot.model.diagnostics(m.full, subset.wcoh.df$animal, subset.wcoh.df$laserOn)
+coef(m.full)$animal
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+```
+Create ratio of coherence and plot for each animal?
+```{r}
+
+```
+
+
 TODO:
-[] check coherence using a diode? or no
+[] check coherence in ripple band during the epochs with ripples in CA3. 
+[] Plot coherence in bands up to 250 Hz.

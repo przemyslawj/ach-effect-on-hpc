@@ -1,10 +1,14 @@
-function [keep_sample] = excludeEMGNoisePeriods(emgsignal, crop_window_length)
+function [keep_sample] = excludeEMGNoisePeriods(emgsignal, crop_window_length, threshold)
+
+if nargin < 3
+    threshold = 2;
+end
 
 is_kept = ones(size(emgsignal));
 sig_std = std(emgsignal);
 diff_vals = abs(diff(emgsignal));
 
-noise_peaks = find(diff_vals > sig_std * 2);
+noise_peaks = find(diff_vals > sig_std * threshold);
 
 halfwindow_len = int32(crop_window_length / 2);
 

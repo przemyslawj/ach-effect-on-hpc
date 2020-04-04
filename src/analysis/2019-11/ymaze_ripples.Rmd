@@ -14,8 +14,8 @@ data_dir = '/mnt/DATA/chat_ripples/y-maze/'
 img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 
 if (diode.signal) {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th5.csv'))
-  ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_diode_th5.csv'))
+  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
+  ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_diode_th6.csv'))
 } else {
   psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
   ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_th6.csv'))
@@ -152,7 +152,7 @@ swr.ymaze.summary %>%
   filter(stage_desc %in% c('DuringStim', 'StartZone', 'FirstArm', 'BeforeGoalZone')) %>%
   ggplot() +
   facet_grid(date ~ .) +
-  geom_point(aes(x=stage_desc, y=has_ripples.pct, color=stage_desc))
+  geom_jitter(aes(x=stage_desc, y=has_ripples.pct, color=stage_desc))
 
 ```
 
