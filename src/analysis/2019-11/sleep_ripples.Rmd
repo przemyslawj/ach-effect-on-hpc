@@ -4,7 +4,7 @@ output: html_notebook
 ---
 
 ```{r}
-data_dir =  '/mnt/DATA/chat_ripples/baseline'
+data_dir =  '/mnt/DATA/chat_ripples/urethane'
 diode.signal = TRUE
 
 if (diode.signal) {
@@ -53,7 +53,7 @@ The unprocessed signal is visible on the bottom panel, top panel shows the power
 ripple.df %>%
   ggplot() +
   geom_histogram(aes(x=peak_freq, fill=animal, color=animal),  position='identity',alpha=0.2) + 
-  facet_grid(. ~ channelLocation)
+  facet_grid(state ~ channelLocation)
 
 ```
 
@@ -150,8 +150,8 @@ left_join(A, B, by=c('trial_id', 'channelLocation'), suffix=c('.a', '.b')) %>%
 ```{r include=TRUE}
 ggplot(psddf.all) +
     geom_boxplot(aes(x=desc, y=swr_incidence, fill=desc), notch=FALSE) +
-    facet_grid(. ~ channelLocation) +
-    #geom_point(size=1) +
+    facet_grid(animal + state ~ channelLocation, scales = 'free') +
+    #facet_grid(state ~ channelLocation) +
     xlab('Laser')
 ```
 
@@ -159,6 +159,7 @@ Paired comparison of ripple incidence during the same trial shows the effect of 
 
 ```{r include=TRUE}
 my.paired.plot(paired.psddf.all, 'swr_incidence') +
+  facet_grid(state ~ .) +
   ylab('Ripple incidence (Hz)')
 ```
 SWR incidence summary
@@ -180,7 +181,7 @@ Ripple peak freq not different between laser on and off
 ripple.df %>%
   ggplot() +
   geom_boxplot(aes(x=animal, y=peak_freq, col=laserOn))  +
-  facet_grid(. ~ channelLocation) +
+  facet_grid(state ~ channelLocation) +
   ylab('Peak Frequency (Hz)') + xlab('Animal')
 
 kruskal.test(peak_freq~laserOn, data=ripple.df)
@@ -242,34 +243,35 @@ ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_', channel.loc, '.pdf'),
 ```
 
 Decrease in ripples per animal
-```{r include=TRUE}
+```{r}
+swr.baseline.summary = bind_rows(psddf.off, psddf.on) %>%
+  group_by(animal, laserOn, stage_desc, state, channelLocation) %>% 
+  dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
+                   swr_incidence.sem=sem(swr_incidence),
+                   has_ripples.pct=sum(swr_incidence > 0) / n(),
+                   nripples.mean = mean(nripples)) 
+
 xlabels = rep(c('-20 - 0 s', '0 - 20 s'), 2)
 
-paired.animal.summary = paired.psddf.all %>%
-  filter(desc %in% c('1_before', '2_stim')) %>%
-  group_by(animal, channelLocation, laserOn, paired_group, paired_group_num) %>%
-  dplyr::summarise(swr_incidence.mean = mean(swr_incidence), 
-                   swr_incidence.sem = sem(swr_incidence))
-  
-ggplot(paired.animal.summary) +
-  geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal), 
-            size=0.6, alpha=1, linetype=1) +
+swr.baseline.summary %>%
+  #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
+  #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
+  ggplot() +
+  #geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
+  geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
   geom_ribbon(aes(x=laserOn, 
                   ymin=swr_incidence.mean - swr_incidence.sem, 
                   ymax=swr_incidence.mean + swr_incidence.sem,
                   group=animal), 
-              alpha=0.05) +
-  scale_x_discrete(labels = xlabels) +
-  facet_grid(. ~ channelLocation) +
-  ylab('Ripple incidence (Hz)') + 
-  xlab('') +
-  labs(colour='') +
-  gtheme + 
-  theme(legend.position = 'top',
-        axis.text.x=element_text(angle = 30, hjust = 1)) 
-ggplot2::ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_comparison.pdf'), 
-                width=col_width, height=7, units='cm', dpi=300, device=cairo_pdf)
+                alpha=0.1) +
+  xlab('Stimulation') + ylab('Ripple incidence at goal (Hz)') +
+  facet_grid(state ~ channelLocation) +
+  scale_x_discrete(labels=xlabels) +
+  scale_y_continuous(breaks=c(0, 0.1, 0.2)) +
+  #scale_x_continuous(breaks=c(5,6))+
+  gtheme
 ```
+
 
 ```{r}
 my_comparisons <- list( c("0", "1"))

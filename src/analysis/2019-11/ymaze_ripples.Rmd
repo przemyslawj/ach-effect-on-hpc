@@ -4,6 +4,9 @@ output: html_notebook
 ---
 ```{r}
 library(purrr)
+
+laser.col='#0098ffff'
+nolaser.col='grey30'
 ```
 
 
@@ -23,6 +26,8 @@ if (diode.signal) {
 
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 ripples.ymaze = prepare.ymaze.df(ripples.ymaze)
+
+
 ```
 
 
@@ -70,51 +75,66 @@ psddf.ymaze.correct = filter(psddf.ymaze.correct,
 
 Plot ripples over trial
 ```{r}
-ripples.ymaze %>% 
+selected.stages = c('StartZone', 'DuringStim')
+ripples.sample = ripples.ymaze %>% 
   filter(correct == 1) %>% 
   filter(learning_day == 6, animal=='PT') %>%
-  filter(stage_desc %in% c('StartZone', 'DuringStim')) %>%
-  ggplot() +
-  geom_point(aes(x=peak_t, y=trial_no, color=laserOn)) +
-  facet_grid(channelLocation ~ stage_desc) +#, scales = 'free_x') +
-  gtheme +
-  xlab('Time (s)') + ylab('# trial')
+  filter(stage_desc %in% selected.stages)
 
-ggsave(paste0(img_dir, '/indiv_ripples_time.svg'), units = 'cm',
-       height=7, width=12)
+ripples.sample$stage_desc = factor(ripples.sample$stage_desc, 
+                                   levels=selected.stages, 
+                                   labels=c('Start', 'Goal'),
+                                   ordered=TRUE)
+ripples.sample %>%
+  ggplot() +
+  geom_point(aes(x=peak_t, y=ceiling(trial_no/2), color=laserOn), size=1) +
+  facet_grid(channelLocation + laserOn ~ stage_desc) +#, scales = 'free_x') +
+  scale_color_manual(labels=c('Off', 'On'), values=c(nolaser.col, laser.col)) +
+  gtheme +
+  #xlim(c(0,25))+
+  #scale_y_continuous(breaks=c(2,4))+
+  xlab('Time (s)') + ylab('Trial number')
+
+ggsave(paste0(img_dir, '/indiv_ripples_time.pdf'), units = 'cm',
+       dpi=300, device=cairo_pdf,
+       height=8, width=12)
 ```
 
 
 ```{r}
 swr.ymaze.summary = psddf.ymaze.correct %>%
-  group_by(animal, date, learning_day, laserOn, stage_desc, channelLocation) %>% 
+  filter(learning_day >= 5)  %>%
+  group_by(animal, laserOn, stage_desc, channelLocation) %>% 
   dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
                    swr_incidence.sem=sem(swr_incidence),
                    has_ripples.pct=sum(swr_incidence > 0) / n(),
                    nripples.mean = mean(nripples)) 
-swr.ymaze.summary$date = as.factor(swr.ymaze.summary$date)
+#swr.ymaze.summary$date = as.factor(swr.ymaze.summary$date)
 ```
 
 ```{r}
 swr.ymaze.summary %>%
-  #filter(stage_desc == 'DuringStim', learning_day >= 5)  %>%
   filter(stage_desc == 'DuringStim')  %>%
-  dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
-                date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
+  #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
+  #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
   ggplot() +
-  geom_point(aes(x=date_laser_val, y=swr_incidence.mean, color=animal)) +
-  geom_line(aes(x=date_laser_val, y=swr_incidence.mean, group=date_animal)) +
-  geom_ribbon(aes(x=date_laser_val, 
+  #geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
+  geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
+  geom_ribbon(aes(x=laserOn, 
                   ymin=swr_incidence.mean - swr_incidence.sem, 
                   ymax=swr_incidence.mean + swr_incidence.sem,
-                  group=date_animal), 
+                  group=animal), 
                 alpha=0.1) +
-  xlab('Learning day') + ylab('Ripple incidence at goal (Hz)') +
+  xlab('Stimulation') + ylab('Ripple incidence at goal (Hz)') +
   facet_grid(. ~ channelLocation) +
+  scale_x_discrete(labels=c('off', 'on')) +
+  scale_y_continuous(breaks=c(0, 0.1, 0.2)) +
+  #scale_x_continuous(breaks=c(5,6))+
   gtheme
 
-ggsave(paste0(img_dir, '/ripples_change.svg'), units = 'cm',
-       height=5, width=8)
+ggsave(paste0(img_dir, '/ripples_change.pdf'), units = 'cm',
+       dpi=300, device=cairo_pdf,
+       height=5, width=4.5)
 ```
 
 ```{r}
@@ -131,7 +151,7 @@ Significance testing
 ```{r}
 last2days.ymaze.correct = filter(psddf.ymaze.correct, 
                                  learning_day >= 5,
-                                 channelLocation == 'CA1',
+                                 channelLocation == 'CA3',
                                  stage_desc == 'DuringStim')
 m.full = lmerTest::lmer(swr_incidence ~ laserOn + (1 + laserOn | animal), 
                         data=last2days.ymaze.correct, 

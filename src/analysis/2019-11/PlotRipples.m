@@ -1,16 +1,31 @@
 datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 secondOffset = 3;
+is_ymaze_trial = 1;
+
+datarootdir = '/mnt/DATA/chat_ripples/baseline';
+secondOffset = 0;
+is_ymaze_trial = 0;
 
 save_plots = 1;
+selected_channels_only = 1;
+use_diode = 1;
+
+reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
+if ~is_ymaze_trial
+    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
+end
+ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
 ripples_filename = 'ripples_diode_th6.csv';
 ripplestable = readtable([datarootdir filesep ripples_filename]);
-ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
+%ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
+%ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);
 
 ripplestable.dated_file_channel = strcat(...
     datestr(ripplestable.date, 'yyyy-mm-dd'), ...
     '_', ripplestable.file_name,...
-    '_', ripplestable.channelLocation);
+    '_', ripplestable.channelLocation,...
+    '_', 'laser', num2str(ripplestable.laserOn));
 [g, gN] = grp2idx(ripplestable.dated_file_channel); 
 
 for gi = 1:max(g)
@@ -28,8 +43,7 @@ for gi = 1:max(g)
     fprintf('Processing file for date=%s file=%s\n', dateddir, binfile.name);
     meta = ReadMeta(binfile.name, binfile.folder);
     channels_file = reverse_channels_file;
-    if ismember('reverse_channel_map', group_ripplestable.Properties.VariableNames) &&...
-            (expstable.reverse_channel_map(1) == 0)
+    if strcmp(animal_code, 'OS') && ~is_ymaze_trial
         channels_file = ord_channels_file;
     end
     channelTable = readChannelTable(...
@@ -51,7 +65,9 @@ for gi = 1:max(g)
     channel_index = find(...
         strcmp(strrep(channelTable.channel_name, ' ', ''), ...
         strrep(group_ripplestable.channelName{1}, ' ', '')));
-    figName = sprintf('Channel %s', channelTable.channel_name{channel_index});
+    figName = sprintf('Channel %s, laser %d', ...
+        channelTable.channel_name{channel_index}, ...
+        group_ripplestable.laserOn(1));
     h = figure('name', figName,...
                'Position', [100 1000 1200 500]);
     ripple_slots = 8;
@@ -72,6 +88,9 @@ for gi = 1:max(g)
         start_index = max(1, peak_index - halfwindow_len);
         end_index = min(peak_index + halfwindow_len, length(channel_filtered));
         indecies = start_index : end_index; 
+        if isempty(indecies)
+            continue
+        end
         slot_h = floor((i - 1)/ nslots_w) + 1;
         slot_i = 2 * (slot_h - 1) * nslots_w + mod(i - 1, nslots_w) + 1;
         
@@ -90,11 +109,15 @@ for gi = 1:max(g)
         %ylim([-0.3, 0.3]);
         
     end
+    if isempty(hAxRaw)
+        continue
+    end
+    
     linkaxes(hAxRaw,'y');
     linkaxes(hAxFiltered,'y');
     
     if save_plots
-        fig_dir = fullfile(datarootdir, 'swrs100_250', animal_code);
+        fig_dir = fullfile(datarootdir, 'swrs', animal_code);
         if ~isfile(fig_dir)
             mkdir(fig_dir);
         end

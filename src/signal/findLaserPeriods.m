@@ -1,6 +1,6 @@
-function [laserPeriods] = findLaserPeriods(laserSignal, max_indexdiff)
+function [laserPeriods] = findLaserPeriods(laserSignal, max_indexdiff, laserOnThreshold)
+    laserSignal = movmean(laserSignal, 100);
     laserSignal = abs([0 laserSignal 0]);
-    laserOnThreshold = 100;
     laserOnIndex = find(laserSignal > laserOnThreshold);
     laserTurnedOff = laserOnIndex(diff([laserOnIndex numel(laserSignal) + max_indexdiff + 1]) > max_indexdiff);
     laserTurnedOn = laserOnIndex(diff([-max_indexdiff-1 laserOnIndex]) > max_indexdiff);

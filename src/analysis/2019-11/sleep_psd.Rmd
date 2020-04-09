@@ -36,7 +36,9 @@ sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
 ```
 
 ```{r include=FALSE}
-img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/baseline/'
+experiment_name = 'baseline'
+
+img_dir = paste0('/home/prez/tmp/ymaze_chat_x_ai32/img_gen/', experiment_name)
 px2pt = 1/(ggplot2::.pt*72.27/96)
 gtheme = theme_minimal() + theme_cowplot() + 
   theme(text = element_text(size=8, family = 'Arial'), 
@@ -50,16 +52,16 @@ gtheme = theme_minimal() + theme_cowplot() +
         axis.title.y = element_text(size=8))
 
 col_width = 8.5 
-immobile.col = '#440154ff'
-mobile.col = '#35b779ff'
+laser.col='#0098ffff'
+nolaser.col='grey30'
 ```
 
 
 
 ```{r include=FALSE}
-diode.signal = FALSE
+diode.signal = TRUE
 
-data_dir =  '/mnt/DATA/chat_ripples/baseline'
+data_dir = paste0('/mnt/DATA/chat_ripples/', experiment_name)
 
 if (diode.signal) {
   psddf = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
@@ -81,11 +83,6 @@ freq.bands.df = data.frame(
 )
 ```
 
-```{r}
-states.new = list(Immobile='asleep',Mobile="awake")
-levels(psddf$state) = states.new
-```
-
 # Effects on the signal spectrum
 ```{r}
 psddf = mutate(psddf,
@@ -96,30 +93,31 @@ psddf = mutate(psddf,
 
 ```{r}
 source('psd_analysis.R')
-psd.molten = melt.freq.bands(psddf, extra.id.vars = c())
+psd.molten = melt.freq.bands(psddf, extra.id.vars = c('state'))
 psd.ratio.df = calc.freq.band.ratio(psd.molten)
 
 animal.psd.ratio = psd.ratio.df %>%
-  dplyr::group_by(animal, band_name, band_start_freq, channelLocation) %>%
+  dplyr::group_by(animal, band_name, band_start_freq, channelLocation, state) %>%
   dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
                    ratio.sem=sem(power.ratio.change))
   
-axis.breaks=c(1:9,seq(10,100,10))
+axis.breaks=c(1:9,seq(10,100,10),200)
 axis.labels=rep('', length(axis.breaks))
 axis.labels[1]=1
 axis.labels[10]=10
 axis.labels[19]=100
+axis.labels[20]=200
 
 animal.psd.ratio %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, group=animal, y=ratio.mean, color=animal)) + 
-  #geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
-  #            alpha=0.1) +
+  geom_ribbon(aes(x=band_start_freq, group=animal, ymin=ratio.mean-ratio.sem, ymax=ratio.mean+ratio.sem),
+              alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
-  facet_grid(. ~ channelLocation) +
+  facet_grid(state ~ channelLocation) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
   gtheme +
@@ -131,7 +129,7 @@ TODO should sample the same number of trials per animal
 ```{r}
 
 channel.psd.ratio = psd.ratio.df %>%
-  dplyr::group_by(band_name, band_start_freq, channelLocation) %>%
+  dplyr::group_by(band_name, band_start_freq, channelLocation, state) %>%
   dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
                    ratio.sem=sem(power.ratio.change))
   
@@ -142,9 +140,9 @@ channel.psd.ratio %>%
               alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept=1, linetype='dashed') +
-  facet_grid(. ~ channelLocation) +
+  facet_grid(state ~ channelLocation) +
   xlab('Frequency (Hz)') +
   ylab('LFP power ratio') +
   gtheme +
@@ -152,6 +150,7 @@ channel.psd.ratio %>%
 ```
 ```{r}
 animal.psd = psd.molten %>%
+  filter(state != 'scopolamine') %>%
   group_by(channelLocation, animal, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.power = mean(log(band_power)),
                    sem.power = sem(log(band_power)))
@@ -162,8 +161,8 @@ animal.psd %>%
   geom_line(aes(x=band_start_freq, y=mean.power, group=laserOn, color=laserOn), size=2*px2pt) +
   geom_ribbon(aes(x=band_start_freq, y=mean.power, group=laserOn, ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
-            ymin=-15, ymax=-8, alpha=0.05, fill='grey10') +
-  facet_grid(animal ~ channelLocation) +
+            ymin=-15, ymax=-5, alpha=0.05, fill='grey10') +
+  facet_grid(animal ~ channelLocation, scales = 'free') +
   scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
   gtheme +
   xlab('Frequency (Hz)') + ylab('Power (log)')
@@ -305,7 +304,7 @@ df.norm %>%
                    value.med=median(norm.value) %>% round(2) ,
                    value.sem=sem(norm.value) %>% round(2))
 df.norm %>%
-  ggpubr::ggboxplot(x='band', y='norm.value', color='channelLocation') +
+  ggpubr::ggboxplot(x='band', y='norm.value') +
   geom_hline(yintercept=1, linetype='dashed') +
   stat_compare_means(aes(label = paste0(..p.format..)), 
                      method='wilcox.test', 
@@ -313,7 +312,6 @@ df.norm %>%
   gtheme + 
   theme(legend.position='none',
         axis.text.x=element_text(angle = 30, hjust = 1)) +
-  scale_color_manual(labels=c('', ''), values=c(immobile.col, mobile.col, 'black')) +
   facet_grid(. ~ channelLocation) +
   ylim(c(0,4)) +
   ylab('') +
@@ -344,7 +342,7 @@ animal.df.norm %>%
   scale_color_manual(labels=c('', ''), values=c(immobile.col, mobile.col, 'black')) +
   scale_x_continuous(labels = levels(animal.df.norm$band), breaks = 1:6) +
   facet_grid(. ~ channelLocation) +
-  ylim(c(0,2.1)) +
+  #ylim(c(0,2.1)) +
   ylab('') +
   xlab('') 
 
@@ -493,7 +491,8 @@ ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.
 ```
 # Coherence
 ```{r}
-wcoh.df = read_csv(paste(data_dir, 'coherence_table.csv', sep='/'))
+#wcoh.df = read_csv(paste(data_dir, 'ripple_coherence_table_diode.csv', sep='/'))
+wcoh.df = read_csv(paste(data_dir, 'coherence_table_diode.csv', sep='/'))
 wcoh.df$animal = as.factor(wcoh.df$animal)
 wcoh.df$laserOn = as.factor(wcoh.df$laserOn)
 wcoh.df = wcoh.df %>%
@@ -520,16 +519,16 @@ animal.wcoh.df %>%
               alpha=0.1) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-  scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   xlab('Frequency (Hz)') +
   ylab('Coherence') +
-  facet_wrap(animal ~ ., ncol = 2) +
+  facet_wrap(animal ~ ., ncol = 3) +
   gtheme +
   theme(legend.position = 'top')
 ```
 Coherence not changed by the laser.
 ```{r}
-m.full = lmerTest::lmer(log(coh_theta) ~ laserOn + (1 + laserOn | animal), data=wcoh.df, REML = TRUE) 
+m.full = lmerTest::lmer(log(abs(coh_theta)) ~ laserOn + (1 + laserOn | animal), data=wcoh.df, REML = TRUE) 
 summary(m.full)
 plot.model.diagnostics(m.full, wcoh.df$animal, wcoh.df$laserOn)
 coef(m.full)$animal

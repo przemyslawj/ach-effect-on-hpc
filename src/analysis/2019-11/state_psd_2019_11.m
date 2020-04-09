@@ -5,21 +5,33 @@
 
 %% setup results
 ripple_std_thr = 6;
-use_diode = 0;
+use_diode = 1;
 selected_channels_only = 1;
-is_urethane = 0;
+is_urethane = 1;
 is_after_ymaze = 0;
-%datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-%is_ymaze_trial = 1;
-%secondOffset = 3;
-datarootdir = '/mnt/DATA/chat_ripples/baseline';
+is_baseline = 0;
 is_ymaze_trial = 0;
+
 secondOffset = 0;
+if is_ymaze_trial
+    datarootdir = '/mnt/DATA/chat_ripples/y-maze';
+    secondOffset = 3;
+end
+if is_baseline
+    datarootdir = '/mnt/DATA/chat_ripples/baseline';
+end
+if is_urethane
+    datarootdir = '/mnt/DATA/chat_ripples/urethane';
+end
+        
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
 reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
+if is_baseline
+    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
+end
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
 nexp = size(expstable, 1);
@@ -70,10 +82,7 @@ for i = 1:nexp
 
     laserChannelIdx = find(strcmp(channelTable.location, 'Laser'));
     emgIdx = find(strcmp(channelTable.location, 'EMG'));
-    if is_ymaze_trial == 0
-        trialPeriods = extractTrialPeriodsFromLaser(dataArray,...
-            laserChannelIdx, fs);
-    else
+    if is_ymaze_trial == 1       
         tracking_filepath = [ datarootdir filesep get_trackingfilepath(dateddir, binfile.name)];
         time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
         if ~isempty(time_mouse_arrived)
@@ -84,6 +93,17 @@ for i = 1:nexp
         else 
             trialPeriods = [];
         end
+    else
+        if is_baseline
+            trialPeriods = extractTrialPeriodsFromLaser(dataArray,...
+                laserChannelIdx, fs, 100);
+        else
+            if is_urethane
+                trialPeriods = extractTrialPeriodsFromLaser(-dataArray + 10,...
+                   laserChannelIdx, fs, 5.15);
+            end
+        end
+            
     end
     
     if is_after_ymaze

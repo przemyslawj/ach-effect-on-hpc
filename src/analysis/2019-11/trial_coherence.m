@@ -1,10 +1,5 @@
-% TODO:
-% - classify as quiet, asleep based on EMG
-% - calculate based on diode subtracted channels and compare
-% - how to choose electrodes?
-
 %% setup results
-use_diode = 0;
+use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
@@ -73,7 +68,7 @@ for i = 1:nexp
     emgIdx = find(strcmp(channelTable.location, 'EMG'));
     if is_ymaze_trial == 0
         trialPeriods = extractTrialPeriodsFromLaser(downsampledDataArray,...
-            laserChannelIdx, downfs);
+            laserChannelIdx, downfs, 100);
         
         trialPeriods = trialPeriods(~strcmp(trialPeriods.stage_desc, 'after_stim'), :);
         % assumes trials ordered
@@ -200,17 +195,16 @@ for i = 1:nexp
             result_table.stage_desc(entry_i) = trialSections.stage_desc(section_i);
             result_table.laserOn(entry_i) = trialSections.laserOn(section_i);
             
-            result_table.coh_slow(entry_i) = CoherenceMean(freqs, section_wcoh, slow);
-            result_table.coh_theta(entry_i) = CoherenceMean(freqs, section_wcoh, theta);
-            result_table.coh_slow_gamma(entry_i) = CoherenceMean(freqs, section_wcoh, slow_gamma);
-            result_table.coh_med_gamma(entry_i) = CoherenceMean(freqs, section_wcoh, med_gamma);
-            result_table.coh_fast_gamma(entry_i) = CoherenceMean(freqs, section_wcoh, fast_gamma);
-            result_table.coh_above_theta(entry_i) = CoherenceMean(freqs, section_wcoh, above_theta);
-            result_table.coh_ripple_band(entry_i) = CoherenceMean(freqs, section_wcoh, ripple_band);
+            result_table.coh_slow(entry_i) = CoherenceMean2(freqs, section_wcoh, slow);
+            result_table.coh_theta(entry_i) = CoherenceMean2(freqs, section_wcoh, theta);
+            result_table.coh_slow_gamma(entry_i) = CoherenceMean2(freqs, section_wcoh, slow_gamma);
+            result_table.coh_med_gamma(entry_i) = CoherenceMean2(freqs, section_wcoh, med_gamma);
+            result_table.coh_fast_gamma(entry_i) = CoherenceMean2(freqs, section_wcoh, fast_gamma);
+            result_table.coh_above_theta(entry_i) = CoherenceMean2(freqs, section_wcoh, above_theta);
+            result_table.coh_ripple_band(entry_i) = CoherenceMean2(freqs, section_wcoh, ripple_band);
             
             for j=1:(numel(all_bands)-1)
-                result_table.all_coh(entry_i, j) = ...
-                    mean(wcoh(j, keep_section_samples));
+                result_table.all_coh(entry_i, j) = mean(section_wcoh(j, :));
             end
             
             entry_i = entry_i + 1;
@@ -238,5 +232,11 @@ writetable(result_table, [datarootdir filesep 'coherence_table' outfile_suffix])
 function [ mcoh ] = CoherenceMean(freqs, wcoh, band)
     band_freqs = freqs >= band(1) & freqs <= band(2);
     mcoh = mean(mean(wcoh(band_freqs,:),2));
+end
+
+function [ pow ] = CoherenceMean2(freqs, wcoh, band)
+    band_freqs_i = find(freqs >= band(1) & freqs <= band(2));
+    band_freqs = freqs(band_freqs_i);
+    pow = trapz(band_freqs, wcoh(band_freqs_i)) / (max(band_freqs) - min(band_freqs));
 end
 

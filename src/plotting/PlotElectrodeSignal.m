@@ -1,11 +1,11 @@
 path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
 path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
-path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
+path = '/mnt/DATA/chat_ripples/y-maze/2019-11-12/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-selected_channels_only = 1;
-use_diode = 1;
+selected_channels_only = 0;
+use_diode = 0;
 
 secondOffset = 3;
 meta = ReadMeta(binName, path);
@@ -15,7 +15,7 @@ lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels.csv',...
     animal_code, meta, selected_channels_only, use_diode);
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);

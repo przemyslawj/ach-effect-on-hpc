@@ -1,5 +1,6 @@
+use_diode = 1;
 is_ymaze_trial = 1;
-animal = 'all';
+animal = 'BS';
 
 if is_ymaze_trial
     datarootdir = '/mnt/DATA/chat_ripples/y-maze';
@@ -22,8 +23,9 @@ nexp = size(expstable, 1);
 if is_ymaze_trial
     daytable = expstable(...
         expstable.date >= trial_date & ...
+        strcmp(expstable.animal, repmat({animal}, nexp, 1)) &...
         expstable.laserOn == laserOn & expstable.correct == 1, :);
-            %strcmp(expstable.animal, repmat({animal_code}, nexp, 1)) &...
+            
 else
     daytable = expstable(...
          strcmp(expstable.animal, repmat({animal}, nexp, 1)), :);
@@ -37,7 +39,7 @@ all_ripples = table();
 all_bands = exp(0.1:0.07:5.6);
 
 if is_ymaze_trial
-    trial_period_lengths = [10 20 50 50];
+    trial_period_lengths = [10 20 40];
 else
     trial_period_lengths = [20 20 20];
 end
@@ -71,15 +73,19 @@ for i = 1:size(daytable, 1)
         channels_file = ord_channels_file;
     end
     channelTable = readChannelTable(...
-        channels_file, animal_code, meta, 1, 0);
+        channels_file, animal_code, meta, 1, use_diode);
     laserChannelIdx = find(strcmp(channelTable.location, 'Laser'));
     emgIdx = find(strcmp(channelTable.location, 'EMG'));
     
     dataArray = ReadSGLXData(meta, secondOffset, str2double(meta.fileTimeSecs) - secondOffset);
     dataArray = dataArray(channelTable.rec_order,:);
 
-    fs = 625;
+    fs = 1000;
     dataArray = downsample(dataArray', round(meta.nSamp / fs))';
+    if use_diode
+        [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
+    end
+    
     time = (1:size(dataArray,2)) / fs;
     nchans = size(dataArray, 1);    
     
@@ -94,15 +100,15 @@ for i = 1:size(daytable, 1)
             trialPeriods = trialPeriods(...
                 strcmp(trialPeriods.stage_desc, 'StartZone') | ...
                 strcmp(trialPeriods.stage_desc, 'MazeStem') | ...
-                strcmp(trialPeriods.stage_desc, 'StimLast10sec') | ...
-                strcmp(trialPeriods.stage_desc, 'GoalZone20sec'), :);
+                strcmp(trialPeriods.stage_desc, 'DuringStim'), :);
+            %strcmp(trialPeriods.stage_desc, 'StimLast10sec') | ...
             trialPeriods = sortrows(trialPeriods, 'starts');
             trialPeriods.trial_ordinal = ones(size(trialPeriods,1), 1);
         else 
             continue;
         end
     else
-        trialPeriods = extractTrialPeriodsFromLaser(dataArray, laserChannelIdx, fs);
+        trialPeriods = extractTrialPeriodsFromLaser(dataArray, laserChannelIdx, fs, 100);
         %trialPeriods = trialPeriods(~strcmp(trialPeriods.stage_desc, 'after_stim'), :);
         sortrows(trialPeriods, 'starts');
         trialPeriods.trial_ordinal = (repelem(1:(size(trialPeriods,1)/3), 1, 3))';
@@ -117,7 +123,7 @@ for i = 1:size(daytable, 1)
         trial_start = max(1, min(singleTrialPeriods.starts));
         trial_end = min(max(singleTrialPeriods.ends), size(dataArray,2));
         trial_signal = dataArray(:, trial_start : trial_end);
-        
+         
         [wcoh, wcs, freqs] = wcoherence(trial_signal(ca_channels(1),:), ...
             trial_signal(ca_channels(2),:), fs);
         
@@ -205,7 +211,7 @@ end
 %% Plot spectrograms
 xintercepts = [1 cumsum(trial_period_lengths)];
 if is_ymaze_trial
-    xlabels = {'Start Zone','Maze Stem','Goal Zone', 'Last 10 sec'};
+    xlabels = {'Start Zone','Maze Stem','Goal Zone'};
 else
     xlabels = {'laser OFF', 'laser ON', 'laser OFF'};
 end
@@ -215,10 +221,13 @@ if is_ymaze_trial
     file_prefix = 'ymaze_';
 end
 file_prefix = [file_prefix animal '_'];
+if use_diode
+    file_prefix = [file_prefix 'diode_'];
+end
 
 for chan_i = [1 2]
     f = figure('name', ['Channel=' channelLocs{chan_i} ],...
-               'Position', [400 700 800 300]);
+               'Position', [400 700 500 300]);
     zscore_mean = squeeze(band_zscore(chan_i, :, :)) ./ ...
         squeeze((ntrials / 2)); % Each trial counted twice: once per channel
     %zscore_mean = movmean(zscore_mean, 5, 2);
@@ -233,7 +242,7 @@ end
 % Each trial counted twice: once per channel
 scaled_band_coherence = zscore(band_coherence ./ (ntrials / 2));
 f = figure('name', 'Wavelet Coherence',...
-           'Position', [400 700 800 300]);
+           'Position', [400 700 500 300]);
 
 plotSpectrogram(scaled_band_coherence, 1:sum(trial_period_lengths), ...
     all_bands(2:end), xintercepts, xlabels);
@@ -260,25 +269,28 @@ function [] = plotSpectrogram(wt_pow, time, wfreqs, xintercepts, xlabels)
     
     % Workaround to force saving as svg with all the elements
     set(0, 'DefaultFigureRenderer', 'painters');
-    
-    subplot(3,1,1:2);
+    hAx = [];
+    hAx(1) = subplot(3,1,1:2);
     draw_cwt(wt_pow(high_freqs,:), time, wfreqs(high_freqs));
+    %set(gca, 'YScale', 'log')
     h = colorbar;
+    zlimits = h.Limits;
     h.Label.String = 'z-score';
-    
     xticks(xintercepts);
 
-    subplot(3,1,3);
+    hAx(2) = subplot(3,1,3);
     draw_cwt(wt_pow(low_freqs,:), time, wfreqs(low_freqs));
     h = colorbar;
     h.Label.String = 'z-score';
-    %draw_vlines(xintercepts, [min(wfreqs(low_freqs)) min(wfreqs(low_freqs)) + 0.6]);
+    h.Limits = zlimits;
     ax = gca;
     ax.XAxis.Visible = 'on';
     yticks([5 10]);
     xticks(xintercepts);
     xticklabels(xlabels);
     xtickangle(ax, 20);
+    
+    linkaxes(hAx,'x');
 end
 
 function A = apply_ylim(A)

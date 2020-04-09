@@ -14,11 +14,15 @@ select = dplyr::select
 
 library(lmerTest)
 source('psd_analysis.R')
+
+laser.col='#0098ffff'
+nolaser.col='grey30'
+img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 ```
 
 ```{r}
 data_dir =  '/mnt/DATA/chat_ripples/y-maze'
-diode.signal = FALSE
+diode.signal = TRUE
 if (diode.signal) {
   psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
 } else {
@@ -77,35 +81,43 @@ band.zscore %>%
 ```
 
 ```{r}
-daily.band.zscore = band.zscore %>%
-  group_by(channelLocation, date, learning_day, laserOn, stage_desc, band_start_freq) %>%
+animal.band.zscore = band.zscore %>%
+  filter(learning_day >= 5)  %>%
+  group_by(animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.zscore = mean(band.zscore),
                    sem.zscore = sem(band.zscore))
 
-daily.band.zscore %>%
-  #filter(laserOn == 0) %>%
-  #filter(animal == 'BS') %>%
-  filter(learning_day == 6)  %>%
+animal.band.zscore %>%
+  filter(laserOn == 0) %>%
+  filter(animal == 'BS') %>%
   filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
   #filter(stage_desc %in% c('MazeStem', 'AfterConsumedReward_10_sec')) %>%
   #dplyr::mutate(animal_stage = paste0(animal, stage_desc, sep='_')) %>% 
   ggplot(aes(x=band_start_freq, y=mean.zscore, group=stage_desc)) +
-  geom_line(aes(color=stage_desc), size=2*px2pt) +
+  geom_line(aes(color=stage_desc), size=1*px2pt) +
   geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
-  facet_grid(laserOn ~ channelLocation) +
-  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme +
+  coord_flip() +
+  facet_grid(laserOn ~ channelLocation) +
+  xlim(2,15)+
+  ylim(-1, 1.1) +
+  #xlim(20, 250) +
+  #ylim(-1, 1.8) +
   xlab('Frequency (Hz)') +
   ylab('Power z-score') 
+
+ggsave(paste0(img_dir, '/psd_zscore_giht.pdf'), units = 'cm',
+       dpi=300, device=cairo_pdf,
+       height=4, width=10)
 ```
 
 ```{r}
-daily.band.zscore %>%
-  dplyr::mutate(date_laser=paste(date, laserOn, sep='_')) %>%
-  filter(learning_day >= 4)  %>%
+animal.band.zscore %>%
+  dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
+  #filter(learning_day >= 4)  %>%
   filter(stage_desc %in% c('GoalZone20sec')) %>%
-  ggplot(aes(x=band_start_freq, y=mean.zscore, group=date_laser)) +
+  ggplot(aes(x=band_start_freq, y=mean.zscore, group=animal_laser)) +
   geom_line(aes(color=laserOn), size=1*px2pt) +
   #geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
   facet_grid(. ~ channelLocation) +
@@ -155,22 +167,108 @@ animal.psd %>%
   dplyr::mutate(animal_laser = paste(animal, laserOn, sep='_')) %>%
   ggplot(aes(x=band_start_freq, y=mean.power, group=animal_laser)) +
   geom_line(aes(color=laserOn), size=1*px2pt) +
-  geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
+  geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power, fill=laserOn), alpha=0.2) +
+  scale_color_manual(labels=c('OFF', 'ON'), values=c(nolaser.col, laser.col)) +
+  scale_fill_manual(labels=c('OFF', 'ON'), values=c(nolaser.col, laser.col)) +
   facet_grid(animal ~ channelLocation) +
   scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
-  #geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme +
-  xlab('Frequency (Hz)') + ylab('Power (log)')
+  xlab('Frequency (Hz)') + ylab('Log power')
 ```
+Overall PSD
+```{r}
+all.psd = psd.molten %>%
+  filter(learning_day >= 5)  %>%
+  group_by(channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  dplyr::summarise(mean.power = mean(log(band_power)),
+                   sem.power = sem(log(band_power)))
+
+all.psd %>%
+  filter(stage_desc %in% c('GoalZone20sec')) %>%
+  ggplot(aes(x=band_start_freq, y=mean.power, group=laserOn)) +
+  geom_line(aes(color=laserOn), size=1*px2pt) +
+  geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power, fill=laserOn), alpha=0.15) +
+  facet_grid(. ~ channelLocation) +
+  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
+  scale_color_manual(labels=c('off', 'on'), values=c(nolaser.col, laser.col)) +
+  scale_fill_manual(labels=c('off', 'on'), values=c(nolaser.col, laser.col)) +
+  gtheme +
+  labs(fill='', color='') +
+  xlab('Frequency (Hz)') + ylab('Log power')
+
+ggsave(paste0(img_dir, '/psd_diff.pdf'), units = 'cm',
+       dpi=300, device=cairo_pdf,
+       height=6, width=12)
+```
+
+
+
+Plots for log(power) difference stats
+```{r}
+library(rlang)
+compared.ymaze.psd = filter(psddf.ymaze, correct == 1, learning_day >= 5, stage_desc == 'GoalZone20sec')
+
+calc.animal.band.summary = function(df, var) {
+  var = enquo(var)
+  varname = quo_name(var)
+  df %>%
+    dplyr::group_by(animal, channelLocation, laserOn) %>%
+    dplyr::summarise(var.mean = mean(!!var),
+                     var.sem = sem(!!var),
+                     var = varname)
+}
+
+calc.log.diff = function(df) {
+  df %>%
+    dplyr::arrange(animal, channelLocation, var, laserOn) %>%
+    dplyr::group_by(animal, channelLocation, var) %>%
+    dplyr::summarise(diff.log.pow = diff(log(var.mean)) )
+}
+
+band.pow.summary = bind_rows(
+    calc.animal.band.summary(compared.ymaze.psd, pow_ripple_band),
+    calc.animal.band.summary(compared.ymaze.psd, pow_fast_gamma),
+    calc.animal.band.summary(compared.ymaze.psd, pow_theta)
+  ) 
+band.pow.summary$var = as.factor(band.pow.summary$var)
+bandnames = levels(band.pow.summary$var)
+
+mean.band.pow.diff = calc.log.diff(band.pow.summary)
+```
+
+```{r}
+mean.band.pow.diff$var = factor(mean.band.pow.diff$var, 
+                                bandnames)
+ggplot(mean.band.pow.diff) +
+  geom_point(aes(x=var, y=diff.log.pow)) +
+  geom_hline(yintercept = 0.0, linetype='dashed') +
+  gtheme +
+  facet_grid(. ~ channelLocation) +
+  xlab('') + ylab('Log band power difference')
+```
+```{r}
+band.pow.summary$var = as.numeric(band.pow.summary$var)
+
+band.pow.summary %>%
+  dplyr::mutate(xval = var - (as.numeric(laserOn) - 1.5),
+                xgroup = paste(var, animal, sep='_')) %>% 
+  ggplot(aes(x=xval, group=xgroup)) +
+  geom_ribbon(aes(ymin=var.mean - var.sem, ymax=var.mean+var.sem),
+                alpha=0.2) +
+  geom_line(aes(y=var.mean)) +
+  facet_wrap(var ~ channelLocation, scales = 'free', ncol = 6) +
+  scale_x_continuous(breaks=1:length(bandnames), labels = bandnames) +
+  scale_y_log10() +
+  xlab('') + ylab('Log band power')
+```
+
 
 No change of power in ripple band.
 ```{r}
-subset.psddf = filter(psddf.ymaze, learning_day == 6,
-                      correct == 1,
-                      channelLocation == 'CA3',
-                      stage_desc == 'GoalZone20sec')
+subset.psddf = filter(compared.ymaze.psd,
+                      channelLocation == 'CA1')
 
-m.full = lmerTest::lmer(log(pow_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.psddf, REML = TRUE) 
+m.full = lmerTest::lmer(log(pow_theta) ~ laserOn + (1 + laserOn | animal), data=subset.psddf, REML = TRUE) 
 summary(m.full)
 plot.model.diagnostics(m.full, subset.psddf$animal, subset.psddf$laserOn)
 coef(m.full)$animal
@@ -179,7 +277,7 @@ anova(m.full, refit=FALSE, ddf='Satterthwaite')
 
 # Coherence
 ```{r}
-wcoh.df = read_csv(paste(data_dir, 'coherence_table.csv', sep='/'))
+wcoh.df = read_csv(paste(data_dir, 'ripple_coherence_table_diode.csv', sep='/'))
 wcoh.df$animal = as.factor(wcoh.df$animal)
 wcoh.df$laserOn = as.factor(wcoh.df$laserOn)
 wcoh.df = wcoh.df %>%
@@ -203,8 +301,8 @@ animal.stage.wcoh.df = wcoh.molten %>%
                    power.sem=sem(band_power))
 
 animal.stage.wcoh.df %>%
-  #filter(stage_desc == 'StimLast10sec') %>%
-  filter(stage_desc == 'GoalZone20sec') %>%
+  filter(stage_desc == 'MazeStem') %>%
+  #filter(stage_desc == 'GoalZone20sec') %>%
   dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, group=animal_laser, y=power.mean, color=laserOn)) + 
@@ -229,7 +327,8 @@ subset.wcoh.df = wcoh.df %>%
   filter(stage_desc == 'GoalZone20sec',
          correct == 1,
          learning_day >= 5)
-m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE) 
+m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE)
+m.full = lmerTest::lmer(log(coh_fast_gamma) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE) 
 summary(m.full)
 plot.model.diagnostics(m.full, subset.wcoh.df$animal, subset.wcoh.df$laserOn)
 coef(m.full)$animal
@@ -237,11 +336,26 @@ anova(m.full, refit=FALSE, ddf='Satterthwaite')
 ```
 Create ratio of coherence and plot for each animal?
 ```{r}
-wcoh.summary = group_by()
+wcoh.summary = wcoh.df %>%
+  left_join(dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+          by=c('date', 'animal', 'file_name')) %>%
+  filter(correct==1) %>%
+  filter(learning_day>=5) %>%
+  group_by(animal, laserOn) %>%
+  dplyr::summarise(value.mean=mean(coh_fast_gamma),
+                   value.sem=sem(coh_fast_gamma)) 
+
+wcoh.summary %>%
+  ggplot() +
+  geom_errorbar(aes(x='fgamma', ymin=value.mean-value.sem, ymax=value.mean + value.sem, color=animal, group=laserOn), 
+                width=0.2, position='dodge2')
 ```
 
 
 TODO:
 [] check coherence in ripple band during the epochs with ripples in CA3. 
-[] curiosity: what is the phase of theta between CA3 and CA1
+  - need to check using the ripples generated from the right electodes.
+[x] coherence of the diode signal
+[x] curiosity: what is the theta phase between CA3 and CA1
+  - constant for the same animal but varies between animals from 0 to 180 degrees
 [x] Plot coherence in bands up to 250 Hz.

@@ -13,7 +13,7 @@ melt.freq.bands = function(df, extra.id.vars=c('learning_day', 'dirname'), psd.v
 
 calc.freq.band.ratio = function(psd.molten) {
   reshape2::dcast(psd.molten,
-                  animal + date + trial_id + channelLocation + band_name + band_start_freq ~ stage_desc,
+                  animal + date + trial_id + channelLocation + band_name + band_start_freq + state ~ stage_desc,
                   value.var = 'band_power') %>%
     dplyr::mutate(power.ratio.change=stim / before_stim)
 }
