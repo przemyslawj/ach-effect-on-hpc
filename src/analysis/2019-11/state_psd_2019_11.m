@@ -7,9 +7,9 @@
 ripple_std_thr = 6;
 use_diode = 1;
 selected_channels_only = 1;
-is_urethane = 1;
+is_urethane = 0;
 is_after_ymaze = 0;
-is_baseline = 0;
+is_baseline = 1;
 is_ymaze_trial = 0;
 
 secondOffset = 0;
@@ -324,8 +324,6 @@ end
 
 function [ pow ] = CalcBandPower(fs, signal, band)
     pow = bandpower(signal, fs, band);
-    %band_freqs = find(f1 >= band(1) & f1 <= band(2));
-    %pow = trapz(f1(band_freqs), pxx(band_freqs)) / abs(band(2) - band(1));
 end
 
 function [ pow ] = TotalBandPower2(f1, pxx, band)

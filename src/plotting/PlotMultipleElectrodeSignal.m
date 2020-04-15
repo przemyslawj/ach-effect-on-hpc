@@ -6,7 +6,7 @@ path = '/mnt/DATA/chat_ripples/baseline/2019-09-04/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-showFiltered = 1;
+showFiltered = 0;
 showDiode = 1;
 
 secondOffset = 2;

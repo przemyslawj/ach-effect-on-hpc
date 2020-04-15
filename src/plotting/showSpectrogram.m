@@ -7,7 +7,7 @@ fprintf('Processing file: %s\n', binName);
 
 subplots = 1;
 selected_channels_only = 1;
-use_diode = 0;
+use_diode = 1;
 
 meta = ReadMeta(binName, path);
 
@@ -17,7 +17,7 @@ binNameParts = strsplit(binName, '_g0');
 expname = binNameParts{1};
 
 secondOffset = 3;
-lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 40);
+lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 18);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
@@ -53,13 +53,16 @@ for chan_i = 1:size(channelTable, 1)
     end
     figure('Name', [binName '-' channelTable.channel_name{chan_i} ...
                     ', channel:' num2str(channelTable.channel(chan_i))]);
+    % Workaround to force saving as svg with all the elements
+    %set(0, 'DefaultFigureRenderer', 'painters');
+    
     % Raw signal
-    subplot(4,1,1);
+    subplot(5,1,1);
     timepoints = (1:size(dataArray,2)) / fs;
     plot(timepoints(timeIndecies), dataArray(chan_i,timeIndecies));
     xstd = std(dataArray(chan_i,:));
     
-    subplot(4,1,2);
+    subplot(5,1,2);
     %plot(timepoints, filtered(channel,:));
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(timepoints',...
                                  filtered(chan_i,:)', ...
@@ -78,24 +81,32 @@ for chan_i = 1:size(channelTable, 1)
     [wt, wfreqs]=cwt(dataArray(chan_i,:), 'morse', fs, 'ExtendSignal', true, ...
         'VoicePerOctave', 30, 'WaveletParameters', [3 120]);
     wt_pow = abs(wt).^2;
-    low_freqs = find(wfreqs <= 20);
-    high_freqs = find(wfreqs < 200 & wfreqs > 20);
+    low_freqs = find(wfreqs <= 15);
+    high_freqs = find(wfreqs < 200 & wfreqs > 15);
     
     if subplots == 0
         figure;
     end
-    subplot(4,1,3);
+
+    hAx = [];
+    hAx(1) = subplot(5,1,[3 4]);
     A = z_score(wt_pow(high_freqs,timeIndecies));
     draw_cwt(A, timepoints(timeIndecies), wfreqs(high_freqs));
-    %draw_keypoints(time_mouse_arrived, [min(wfreqs(high_freqs)), max(wfreqs(high_freqs))], lengthSeconds, secondOffset);
+    h = colorbar;
+    zlimits = h.Limits;
+    %draw_keypoints(time_mouse_arrived, [min(wfreqs(high_freqs)), max(wfreqs(high_freqs))], lengthSeconds);
     
-    subplot(4,1,4);
+    hAx(2) = subplot(5,1,5);
     A = zscore(wt_pow(low_freqs,timeIndecies));
     draw_cwt(A, timepoints(timeIndecies), wfreqs(low_freqs));
-    %draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds, secondOffset);
+    h = colorbar;
+    h.Label.String = 'z-score';
+    h.Limits = zlimits;
+    draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds);
     ax = gca;
     ax.XAxis.Visible = 'on';
-    xlabel('Time (sec)');  
+    xlabel('Time (sec)');
+    linkaxes(hAx,'x');
     
 %     figure('Name', ['Pwelch' '-channel-' num2str(chan_i)]);
 %     [pxx, freqs] = pwelch(dataArray(chan_i,1:fs*15), ...
@@ -118,12 +129,12 @@ function A = z_score(cfs)
 end
 
 
-function [] = draw_keypoints(time_mouse_arrived, ylim, lengthSeconds, secondOffset)
+function [] = draw_keypoints(time_mouse_arrived, ylim, lengthSeconds)
     if isempty(time_mouse_arrived)
         return
     end
     for i = 1:numel(time_mouse_arrived.sec)
-        x = time_mouse_arrived.sec(i) - secondOffset;
+        x = time_mouse_arrived.sec(i);
         if x < lengthSeconds && x > 0
             line([x, x], ylim, 'Color', 'white');
         end

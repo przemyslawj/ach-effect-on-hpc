@@ -198,7 +198,7 @@ all.psd %>%
 
 ggsave(paste0(img_dir, '/psd_diff.pdf'), units = 'cm',
        dpi=300, device=cairo_pdf,
-       height=6, width=12)
+       height=5, width=10)
 ```
 
 

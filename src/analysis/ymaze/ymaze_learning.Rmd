@@ -27,7 +27,7 @@ gtheme = theme_minimal() + theme_cowplot() +
         axis.text.y=element_text(size=8, colour = "black"),
         axis.title.x = element_text(size=8),
         axis.title.y = element_text(size=8))
-data_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/data/'
+ymaze_results_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/data/'
 img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/ymaze/'
 ```
 
@@ -36,33 +36,36 @@ sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
 ```
 
 ```{r}
-df.raw = read_csv(paste0(data_dir, 'learning_perf_stim.csv'))
+df.raw = read_csv(paste0(ymaze_results_dir, 'learning_perf_stim.csv'))
 df = gather(df.raw, 'mouse.id', 'correct', 2:ncol(df.raw)) %>%
   filter(!is.na(correct)) %>%
   filter(mouse.id != 0) %>%
   separate(mouse.id, c('cond', 'n', 'mouse.no'), sep='[_(]') %>%
   select(-n) %>%
-  mutate(mouse.no=ifelse(is.na(mouse.no),0,mouse.no),
-         cond=str_trim(cond))
+  dplyr::mutate(mouse.no=ifelse(is.na(mouse.no),0,mouse.no),
+                cond=str_trim(cond))
 
 df$day = as.factor(df$day)
 df$cond = as.factor(df$cond)
 df$correct = as.integer(df$correct)
 df$mouse.no = as.integer(df$mouse.no)
+df$strain = 'ChAT-Ai32'
+df = dplyr::mutate(df, strain_cond=paste(strain, cond))
 
-cond.cols = c('#440154ff', '#31688eff', '#6000ff98', '#35b779ff')
+#cond.cols = c('#440154ff', '#31688eff', '#6000ff98', '#35b779ff')
+# colours for light conditions: no light, exploration througout, light at goal
+cond.cols = c('#4d4d4dff',  '#b32300ff', '#35b779ff', '#0098ffff')
 
 ```
 
 ```{r}
 levels.prev = levels(df$cond)
-df$cond = factor(df$cond, levels=levels.prev[c(2,1,4,3)])
+df$cond = factor(df$cond, levels=levels.prev[c(3,1,4,2)])
 ```
 
 ```{r}
 df %>%
   ggplot() +
-  #geom_boxplot(aes(x=day, y=correct, colour=cond))
   geom_boxplot(aes(x=day, y=correct, colour=cond)) +
   scale_color_manual(values=cond.cols) +
   gtheme +
@@ -73,21 +76,20 @@ df %>%
 
 ```{r}
 df %>%
-  group_by(day,cond) %>%
-  summarise(mcorrect=mean(correct), semcorrect=sem(correct)) %>%
-  ggplot(aes(x=day, y=mcorrect, group=cond)) +
+  dplyr::group_by(day, cond) %>%
+  dplyr::summarise(mcorrect=mean(correct), semcorrect=sem(correct)) %>% 
+  ggplot(aes(x=as.integer(day), y=mcorrect, group=cond)) +
   geom_line(aes(colour=cond, group=cond)) +
-  geom_point(aes(colour=cond, group=cond)) +
-  #geom_errorbar(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect), width=0.2) +
   geom_ribbon(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect, fill=cond), alpha=0.1) +
-  geom_hline(yintercept = 50, linetype='dashed') +
+  geom_hline(yintercept = 80, linetype='dashed') +
   gtheme +
   scale_color_manual(values=cond.cols) +
   scale_fill_manual(values=cond.cols) +
   #theme(legend.position='none') +
+  scale_x_continuous(breaks=1:7, limits=c(1,7))+
   labs(colour='', fill='') +
   xlab('Day') + ylab('Correct (%)')
-ggsave(paste0(img_dir, 'learning_curve.pdf'), width=6.5, 
+ggsave(paste0(img_dir, 'learning_curve.pdf'), width=6, 
        height=6.5, unit='cm', dpi=300, device=cairo_pdf)
   
 ```
@@ -108,12 +110,12 @@ which.day.learnt = function(correct_pct, learning.crit) {
 }
 
 df.learnt = df %>% 
-  group_by(cond, mouse.no) %>%
-  arrange(day) %>%
-  summarise(learnt.90=which.day.learnt(correct, 90),
+  dplyr::group_by(cond, strain, strain_cond, mouse.no) %>%
+  dplyr::arrange(day) %>%
+  dplyr::summarise(learnt.90=which.day.learnt(correct, 90),
             learnt.80=which.day.learnt(correct, 80),
-            learnt.70=which.day.learnt(correct, 70)) %>%
-  gather(key='criterion', value='learnt.day', 3:5)
+            learnt.70=which.day.learnt(correct, 70)) %>% 
+  gather(key='criterion', value='learnt.day', 5:7)
 
 df.learnt.80 = filter(df.learnt, criterion == 'learnt.80')
 df.learnt.90 = filter(df.learnt, criterion == 'learnt.90')
@@ -126,16 +128,17 @@ df.learnt %>%
   filter(criterion == 'learnt.80') %>%
   #ggplot(aes(x=cond, y=learnt.day)) +
   #geom_boxplot(aes(colour=cond), outlier.size=0) +
-  ggpubr::ggboxplot(x='cond', y='learnt.day', color = 'cond' ) +
-  geom_dotplot(aes(fill=cond), binaxis="y", stackdir="center", 
-               binwidth=0.2, dotsize=1, stackratio=0.8, alpha=0.7) +
+  ggpubr::ggboxplot(x='cond', y='learnt.day', outlier.shape=NA) +
+  geom_dotplot(aes(colour=cond), 
+               binaxis="y", stackdir="center", fill=NA,
+               binwidth=0.2, dotsize=1, stackratio=0.8, width=px2pt * 1) +
   stat_compare_means(aes(label = paste0('p=', ..p.format..)),
                      method='wilcox.test',
                      comparisons=list(c(1,3), c(1,4)),
                      label.y=c(6.5,7.4)) +
   gtheme +
   scale_color_manual(values=cond.cols) +
-  scale_fill_manual(values=cond.cols) +
+  #scale_fill_manual(values=cond.cols) +
   theme(axis.text.x=element_text(angle = 45, hjust = 1)) +
   xlab('') + ylab('Days until learned (≥ 80 %)') +
   theme(legend.position = 'none') 
@@ -145,21 +148,12 @@ ggsave(paste0(img_dir, 'learnt_boxplot.pdf'), width=5.6,
 ```
 
 ```{r}
-df.learnt.rew = filter(df.learnt, cond %in% c('No light', 'Reward'))
-df.learnt.throughout = filter(df.learnt, cond %in% c('No light', 'Throughout'))
-wilcox.test(learnt.day ~ cond, df.learnt.throughout, subset = criterion=='learnt.80')
-wilcox.test(learnt.day ~ cond, df.learnt.rew, subset = criterion=='learnt.80')
-```
-
-```{r}
 kruskal.test(learnt.day ~ cond, df.learnt, subset=criterion=='learnt.80')
 library(FSA)
 dunnTest(learnt.day ~ cond, df.learnt.80, method='none')
-dunnTest(learnt.day ~ cond, df.learnt.90, method='none')
-
 ```
 
-# Wild type test
+Tukey multiple comparisons of means test
 ```{r}
 m.aov = aov(learnt.day ~ cond, df.learnt, subset=criterion=='learnt.80') 
 summary(m.aov)
@@ -167,7 +161,7 @@ TukeyHSD(m.aov, 'cond')
 ```
 
 ```{r}
-wtdf.raw = read_csv(paste0(data_dir, 'wt_learning_perf.csv'))
+wtdf.raw = read_csv(paste0(ymaze_results_dir, 'wt_learning_perf.csv'))
 wtdf = gather(wtdf.raw, 'mouse.id', 'correct', 2:ncol(wtdf.raw)) %>%
   filter(!is.na(correct)) %>%
   filter(mouse.id != 0) %>%
@@ -178,45 +172,53 @@ wtdf = gather(wtdf.raw, 'mouse.id', 'correct', 2:ncol(wtdf.raw)) %>%
 
 wtdf$day = as.factor(wtdf$day)
 wtdf$cond = as.factor(wtdf$cond)
+wtdf$cond = factor(wtdf$cond, levels=levels(wtdf$cond)[c(2,1)])
 wtdf$correct = as.integer(wtdf$correct)
 wtdf$mouse.no = as.integer(wtdf$mouse.no)
+wtdf$strain = 'WT'
+wtdf = dplyr::mutate(wtdf, strain_cond=paste(strain, cond))
+wtdf$strain_cond = as.factor(wtdf$strain_cond)
+wtdf$strain_cond = factor(wtdf$strain_cond, levels=levels(wtdf$strain_cond)[c(2,1)])
 
 ```
 
 ```{r}
 wtdf %>%
-  group_by(day,cond) %>%
-  summarise(mcorrect=mean(correct), semcorrect=sem(correct)) %>%
-  ggplot(aes(x=day, y=mcorrect, group=cond)) +
+  dplyr::group_by(day,cond) %>%
+  dplyr::summarise(mcorrect=mean(correct), semcorrect=sem(correct)) %>%
+  ggplot(aes(x=as.integer(day), y=mcorrect, group=cond)) +
   geom_line(aes(colour=cond, group=cond)) +
-  geom_point(aes(colour=cond, group=cond)) +
+  #geom_point(aes(colour=cond, group=cond)) +
   #geom_errorbar(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect), width=0.2) +
   geom_ribbon(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect, fill=cond), alpha=0.1) +
-  geom_hline(yintercept = 50, linetype='dashed') +
+  geom_hline(yintercept = 80, linetype='dashed') +
   gtheme +
   theme(legend.position='none') +
   scale_color_manual(values=c(cond.cols[1], cond.cols[4])) +
   scale_fill_manual(values=c(cond.cols[1], cond.cols[4])) +
+  scale_x_continuous(breaks=1:7, limits=c(1,7))+
   labs(colour='', fill='') +
   xlab('Day') + ylab('Correct (%)')
 ggsave(paste0(img_dir, 'wt_learning_curve.pdf'), width=6, 
-       height=6, units='cm', dpi=300, device=cairo_pdf)
+       height=6.5, units='cm', dpi=300, device=cairo_pdf)
   
 ```
 
 ```{r}
 wtdf.learnt = wtdf %>% 
-  group_by(cond, mouse.no) %>%
-  arrange(day) %>%
-  summarise(learnt.day=which.day.learnt(correct, 80))
+  dplyr::group_by(cond, strain, strain_cond, mouse.no) %>%
+  dplyr::arrange(day) %>%
+  dplyr::summarise(learnt.day=which.day.learnt(correct, 80),
+                   criterion='learnt.80')
 ```
 
 ```{r}
 wtdf.learnt %>%
   #ggplot(aes(x=cond, y=learnt.day)) +
   #geom_boxplot(aes(colour=cond), outlier.size=0) +
-  ggpubr::ggboxplot(x='cond', y='learnt.day', color = 'cond' ) +
-  geom_dotplot(aes(fill=cond), binaxis="y", stackdir="center", 
+  ggpubr::ggboxplot(x='cond', y='learnt.day', outlier.shape=NA) +
+  geom_dotplot(aes(color=cond), 
+               binaxis="y", stackdir="center", fill=NA, 
                binwidth=0.2, dotsize=1, stackratio=0.8, alpha=0.7) +
   stat_compare_means(aes(label = paste0('p=', ..p.format..)),
                      method='t.test',
@@ -235,5 +237,59 @@ ggsave(paste0(img_dir, 'wtlearnt_boxplot.pdf'), width=5.5,
 ```
 ```{r}
 t.test(learnt.day ~ cond, data=wtdf.learnt)
+```
+Joined ChAT and WT
+```{r}
+learnt.joined = bind_rows(wtdf.learnt, df.learnt.80)
+levels.prev = levels(as.factor(learnt.joined$strain_cond))
+learnt.joined$strain_cond = factor(learnt.joined$strain_cond, levels=levels.prev[c(3,1,4,2,6,5)])
+strain.cond.cols = c(cond.cols, cond.cols[1], cond.cols[4])
+learnt.joined$cond = as.factor(learnt.joined$cond)
+learnt.joined$cond = factor(learnt.joined$cond, levels=levels(learnt.joined$cond)[c(3,1,4,2)])
+
+learnt.joined %>%
+  ggplot(aes(x=strain_cond, y=learnt.day)) +
+  stat_summary(fun.y = median, fun.ymin = median, fun.ymax = median,
+               geom = "crossbar", width = 0.6) +
+  geom_dotplot(aes(color=cond), 
+               binaxis="y", stackdir="center", fill=NA, 
+               binwidth=0.2, dotsize=1, stackratio=0.8) +
+  stat_compare_means(aes(label = paste0('p=', ..p.format..)),
+                     method='t.test',
+                     comparisons=list(c(1,3), c(1,4), c(4,6), c(4,5))) +
+  scale_color_manual(values=strain.cond.cols) +
+  gtheme +
+  theme(axis.text.x=element_text(angle = 30, hjust = 1),
+        legend.position = 'none') +
+  scale_y_continuous(breaks=c(1, 3, 5, 7)) +
+  xlab('') + ylab('Days until learned (≥ 80 %)')
+
+ggsave(paste0(img_dir, 'joined_dotplot.pdf'), width=8, 
+       height=6.5, units='cm', dpi=300, device=cairo_pdf)
+```
+
+```{r}
+kruskal.test(learnt.day ~ strain_cond, learnt.joined)
+dunnTest(learnt.day ~ strain_cond, learnt.joined, method='none')
+```
+```{r}
+joined.summary.df = bind_rows(wtdf, df) %>% 
+  dplyr::group_by(day, cond, strain_cond, strain) %>%
+  dplyr::summarise(mcorrect=mean(correct), semcorrect=sem(correct)) 
+joined.summary.df$cond = as.factor(joined.summary.df$cond)
+joined.summary.df$cond = factor(joined.summary.df$cond, levels=levels(joined.summary.df$cond)[c(3,1,4,2)])
+
+joined.summary.df %>%
+  ggplot(aes(x=as.integer(day), y=mcorrect, group=strain_cond)) +
+  geom_line(aes(colour=cond, group=strain_cond, linetype=strain)) +
+  geom_ribbon(aes(ymin=mcorrect-semcorrect, ymax=mcorrect+semcorrect, fill=cond), alpha=0.1) +
+  geom_hline(yintercept = 80, linetype='dashed') +
+  gtheme +
+  scale_color_manual(values=strain.cond.cols) +
+  scale_fill_manual(values=strain.cond.cols) +
+  #theme(legend.position='none') +
+  scale_x_continuous(breaks=1:7, limits=c(1,7))+
+  labs(colour='', fill='') +
+  xlab('Day') + ylab('Correct (%)')
 ```
 

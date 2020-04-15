@@ -1,6 +1,6 @@
 function [ trialPeriods ] = extractTrialPeriodsFromLaser(...
     downsampledDataArray, laserChannelIdx, downfs, laserOnThreshold)
-    lasertrial_duration_sec = 20;
+    lasertrial_duration_sec = 30;
     laserPeriods = [];
     if laserChannelIdx > 0
         laserSignal = downsampledDataArray(laserChannelIdx, :);

@@ -85,19 +85,28 @@ ripples.sample$stage_desc = factor(ripples.sample$stage_desc,
                                    levels=selected.stages, 
                                    labels=c('Start', 'Goal'),
                                    ordered=TRUE)
+
+trial.renumber = ripples.sample %>% 
+  dplyr::select(laserOn, channelLocation, trial_no) %>% 
+  dplyr::group_by(laserOn, channelLocation) %>%
+  dplyr::distinct() %>%
+  dplyr::arrange(trial_no) %>%
+  dplyr::mutate(trial_rank = row_number(trial_no))
+  
+ripples.sample = left_join(ripples.sample, trial.renumber)
+
 ripples.sample %>%
   ggplot() +
-  geom_point(aes(x=peak_t, y=ceiling(trial_no/2), color=laserOn), size=1) +
-  facet_grid(channelLocation + laserOn ~ stage_desc) +#, scales = 'free_x') +
-  scale_color_manual(labels=c('Off', 'On'), values=c(nolaser.col, laser.col)) +
+  geom_tile(aes(x=peak_t, y=trial_rank, fill=laserOn), width=0.5) +
+  facet_grid(channelLocation + laserOn ~ stage_desc) +
+  scale_fill_manual(labels=c('Off', 'On'), values=c(nolaser.col, laser.col)) +
   gtheme +
-  #xlim(c(0,25))+
-  #scale_y_continuous(breaks=c(2,4))+
+  scale_y_continuous(breaks=c(2,4))+
   xlab('Time (s)') + ylab('Trial number')
 
-ggsave(paste0(img_dir, '/indiv_ripples_time.pdf'), units = 'cm',
+  ggsave(paste0(img_dir, '/indiv_ripples_time.pdf'), units = 'cm',
        dpi=300, device=cairo_pdf,
-       height=8, width=12)
+       height=6, width=12)
 ```
 
 
@@ -194,22 +203,18 @@ Ripples conclusion:
 CA1 DuringStim:
   signif lower for th=6 when filtered 80-250, 
   signif lower for th=5 when filtered 100-250, signif for learning_day>=5
-  not signif lower for th=6 when when filtered 100-250 (p=0.07)
 CA3 no signif, 
   v few ripples at 150-250Hz in CA3 th6 or th5, not signif
 
 
-TODO: 
-[] Replicate figure: https://www.nature.com/articles/s41593-017-0061-5/figures/3
+TODOs: 
+[x] Ripples figure: 
    [x] location of SWRs: x - time, y- # trial, point for ripple
    [x] Spectrogram on ymaze? avg for a day
-   
 [x] not seen 20-50Hz oscillations at reward for CA3
 [x] look at ymaze % correct to justify choice of learning day 5 and 6 for ripples comparioson
 [x] look at the found ripples - are they good quality? are they long enough?
 [x] look at all channels
-[] coherence between CA1 and CA3
-
-Problems:
+[x] coherence between CA1 and CA3
 [x] exclude SWRs during movement as detected from EMG
 

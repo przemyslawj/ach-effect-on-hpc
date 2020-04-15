@@ -8,7 +8,7 @@ is_ymaze_trial = 0;
 
 save_plots = 1;
 selected_channels_only = 1;
-use_diode = 1;
+use_diode = 0;
 
 reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
 if ~is_ymaze_trial
@@ -16,7 +16,11 @@ if ~is_ymaze_trial
 end
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
-ripples_filename = 'ripples_diode_th6.csv';
+if use_diode
+    ripples_filename = 'ripples_diode_th6.csv';
+else
+    ripples_filename = 'ripples_th6.csv';
+end
 ripplestable = readtable([datarootdir filesep ripples_filename]);
 %ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
 %ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);

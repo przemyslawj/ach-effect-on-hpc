@@ -4,7 +4,7 @@ output: html_notebook
 ---
 
 ```{r}
-data_dir =  '/mnt/DATA/chat_ripples/urethane'
+data_dir =  '/mnt/DATA/chat_ripples/baseline'
 diode.signal = TRUE
 
 if (diode.signal) {
@@ -53,7 +53,7 @@ The unprocessed signal is visible on the bottom panel, top panel shows the power
 ripple.df %>%
   ggplot() +
   geom_histogram(aes(x=peak_freq, fill=animal, color=animal),  position='identity',alpha=0.2) + 
-  facet_grid(state ~ channelLocation)
+  facet_grid(animal ~ channelLocation)
 
 ```
 
@@ -96,8 +96,8 @@ anova(m.full, refit=FALSE, ddf='Satterthwaite')
 
 CA3
 ```{r}
-ca3.psddf = filter(psddf, channelLocation == 'CA3')
-m.full = lmerTest::lmer(swr_incidence ~ laserOn + (1 + laserOn | animal), data=ca3.psddf, REML = TRUE) 
+ca3.psddf = filter(psddf, channelLocation == 'CA1')
+m.full = lmerTest::lmer(log(0.001 + swr_incidence) ~ laserOn + (1 + laserOn | animal), data=ca3.psddf, REML = TRUE) 
 plot.model.diagnostics(m.full, ca3.psddf$animal, ca3.psddf$laserOn)
 summary(m.full)
 coef(m.full)$animal
@@ -257,7 +257,7 @@ swr.baseline.summary %>%
   #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
   #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
   ggplot() +
-  #geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
+  geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
   geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
   geom_ribbon(aes(x=laserOn, 
                   ymin=swr_incidence.mean - swr_incidence.sem, 
@@ -267,23 +267,11 @@ swr.baseline.summary %>%
   xlab('Stimulation') + ylab('Ripple incidence at goal (Hz)') +
   facet_grid(state ~ channelLocation) +
   scale_x_discrete(labels=xlabels) +
-  scale_y_continuous(breaks=c(0, 0.1, 0.2)) +
+  #scale_y_continuous(breaks=c(0, 0.1, 0.2)) +
   #scale_x_continuous(breaks=c(5,6))+
   gtheme
 ```
 
 
-```{r}
-my_comparisons <- list( c("0", "1"))
-ggpaired(paired.state, x='laserOn', y='swr_incidence', facet.by='state', color='laserOn', 
-         line.color = 'grey', line.size = 0.2, add='jitter') +
-  stat_compare_means(aes(label = paste0("p=", ..p.format..)), 
-                     method='wilcox.test', paired = TRUE, 
-                     label.y = 0.57, label.x = 1.5, comparisons = my_comparisons) +
-  scale_colour_manual(values = c("black", 'purple')) +
-  xlab('') + ylab('Ripple incidence (Hz)') +
-  labs(colour='') +
-  gtheme + theme(legend.position = 'top')
-```
 
 
