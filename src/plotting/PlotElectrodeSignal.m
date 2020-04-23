@@ -1,16 +1,16 @@
-path = '/mnt/DATA/Clara/ymaze/2018-08-17/signal';
-path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
-path = '/mnt/DATA/chat_ripples/y-maze/2019-11-12/signal';
+path = '/mnt/DATA/chat_ripples/baseline/2019-09-04/signal';
+%path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
+%path = '/mnt/DATA/chat_ripples/y-maze/2019-11-12/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-selected_channels_only = 0;
-use_diode = 0;
+selected_channels_only = 1;
+use_diode = 1;
 
-secondOffset = 3;
+secondOffset = 270;
 meta = ReadMeta(binName, path);
-%lengthSeconds = min(40, str2double(meta.fileTimeSecs) - secondOffset);
-lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
+lengthSeconds = min(180, str2double(meta.fileTimeSecs) - secondOffset);
+%lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
 %lengthSeconds = 30;
 
 animal_code = binName(1:2);
@@ -54,17 +54,19 @@ for chan = 1:size(dataArray, 1)
     figure('name', sprintf('Channel %s', channelTable.channel_name{chan}),...
            'Position', [100 1000 1100 600]);
     nfigure = length(findobj('type','figure'));
+    rec_len_sec = 4;
     plotData(fs, dataArray(chan,:), filtered(chan,:), ...
         ripple_starts, ripple_ends, normalizedSquaredSignal', ...
-        0, 2);
+        0, rec_len_sec);
     
     sliderVars = struct('fs', fs, 'lengthSeconds', lengthSeconds,...
         'data', dataArray(chan,:), 'filtered', filtered(chan,:), ...
         'ripple_starts', ripple_starts, 'ripple_ends', ripple_ends,...
-        'normalizedSquaredSignal', normalizedSquaredSignal');
+        'normalizedSquaredSignal', normalizedSquaredSignal',...
+        'slider_window_len_sec', 2 * rec_len_sec);
     sliderHandle = uicontrol('Style', 'slider', ...
               'Position', [10 20 1000 20], ...
-              'UserData', struct('rec_len_sec', 2, 'slider_pos', 0),...
+              'UserData', struct('rec_len_sec', rec_len_sec, 'slider_pos', 0),...
               'SliderStep', [1 / lengthSeconds / 4 , 10 / lengthSeconds / 4],...
               'Tag', sprintf('timeSlider_%d', nfigure));
     set(sliderHandle,'Callback',{@sliderCallback, sliderVars});

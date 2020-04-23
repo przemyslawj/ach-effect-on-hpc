@@ -12,9 +12,9 @@ vars.x = x;
 vars.times = times;
 vars.fs = fs;
 vars.lengthSeconds = size(x,2) / fs;
-vars.max_timewindow = 4;
+vars.slider_window_len_sec = 4;
 
-rec_len_sec = vars.max_timewindow * 0.5;
+rec_len_sec = vars.slider_window_len_sec * 0.5;
 vars.channelTable = channelTable;
 [~, vars.channelOrder] = sort(channelTable.channel_name);
 
@@ -25,8 +25,8 @@ plotTraces(0, rec_len_sec, vars);
 
 sliderHandle = uicontrol('Style', 'slider', ...
           'Position', [10 20 800 20],...
-          'SliderStep', [1 / vars.lengthSeconds / vars.max_timewindow,...
-                         10 / vars.lengthSeconds / vars.max_timewindow],...
+          'SliderStep', [1 / vars.lengthSeconds / vars.slider_window_len_sec,...
+                         10 / vars.lengthSeconds / vars.slider_window_len_sec],...
           'Tag', sprintf('timeSlider_%d', nfigure)); 
 set(sliderHandle,'Callback',{@sliderCallback, vars});
 
@@ -73,7 +73,7 @@ function [] = updatePlotTraces(hObject, vars)
     tag_parts = split(tag,'_');
 
     hZoom = findobj('Tag', ['zoomSlider_', tag_parts{2}]);
-    rec_len_sec = hZoom.Value * vars.max_timewindow;
+    rec_len_sec = hZoom.Value * vars.slider_window_len_sec;
     hTime = findobj('Tag', ['timeSlider_', tag_parts{2}]);
     start_time_sec = (vars.lengthSeconds - rec_len_sec) * hTime.Value;
     plotTraces(start_time_sec, rec_len_sec, vars);

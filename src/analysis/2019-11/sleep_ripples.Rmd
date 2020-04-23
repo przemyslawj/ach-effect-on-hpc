@@ -6,25 +6,11 @@ output: html_notebook
 ```{r}
 data_dir =  '/mnt/DATA/chat_ripples/baseline'
 diode.signal = TRUE
-
-if (diode.signal) {
-  psddf = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
-} else {
-  psddf = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
-}
-psddf$animal = as.factor(psddf$animal)
-psddf$channel = as.factor(psddf$channel)
-psddf$laserOn = as.factor(psddf$laserOn)
-psddf$state = as.factor(psddf$state)
-
-psddf = psddf %>%
-  dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
-psddf$trial_id = as.factor(psddf$trial_id)
 ```
 
 ```{r include=FALSE}
 if (diode.signal) {
-  ripple.df = read_csv(paste0(data_dir,'/','ripples_diode_th6.csv'))
+  ripple.df = read_csv(paste0(data_dir,'/','theta_ripples_diode_th6.csv'))
   
 } else {
   ripple.df = read_csv(paste0(data_dir,'/','ripples_th6.csv'))
@@ -216,7 +202,7 @@ TODO: This could be per mouse and shown as distribution of ripples.
 ```{r include=TRUE}
 source('../bin_ripples.R')
 
-channel.loc='CA3'
+channel.loc='CA1'
 
 binned.ripple.df = ripple.df %>% 
   filter(channelLocation == channel.loc) %>%
@@ -228,18 +214,19 @@ incidence.summary = binned.ripple.df %>%
                     incidence.sd = sem(incidence))
 
 g = ggplot(incidence.summary, aes(x=bin_sec, y=mincidence)) +
-  geom_col(fill='gray', colour='black', position=position_dodge(width=-2.5)) +
+  geom_col(fill='white', colour='black', position=position_dodge(width=-2.5)) +
   geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd), width=1.2) +
   ylab('Ripple\nincidence (Hz)') +
   xlab('Time (s)') +
   #scale_fill_manual(values = c("grey", "#56B4E9")) +
-  scale_x_continuous(breaks=c(20,40))  +
+  scale_x_continuous(breaks=c(30,60))  +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4)) +
   gtheme +
   theme(legend.position = 'none') 
 
 g
 ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_', channel.loc, '.pdf'), 
-       width=9.3, height=3, unit='cm', dpi=300, device=cairo_pdf)
+     width=9.3, height=3, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
 Decrease in ripples per animal
@@ -251,25 +238,26 @@ swr.baseline.summary = bind_rows(psddf.off, psddf.on) %>%
                    has_ripples.pct=sum(swr_incidence > 0) / n(),
                    nripples.mean = mean(nripples)) 
 
-xlabels = rep(c('-20 - 0 s', '0 - 20 s'), 2)
+xlabels = rep(c('off', 'on'), 2)
 
 swr.baseline.summary %>%
   #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
   #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
   ggplot() +
-  geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
+  #geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
   geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
   geom_ribbon(aes(x=laserOn, 
                   ymin=swr_incidence.mean - swr_incidence.sem, 
                   ymax=swr_incidence.mean + swr_incidence.sem,
                   group=animal), 
                 alpha=0.1) +
-  xlab('Stimulation') + ylab('Ripple incidence at goal (Hz)') +
-  facet_grid(state ~ channelLocation) +
+  xlab('Stimulation') + ylab('Ripple incidence (Hz)') +
+  facet_grid(. ~ channelLocation) +
   scale_x_discrete(labels=xlabels) +
-  #scale_y_continuous(breaks=c(0, 0.1, 0.2)) +
-  #scale_x_continuous(breaks=c(5,6))+
+  scale_y_continuous(breaks=c(0.0, 0.2, 0.4)) +
   gtheme
+ggsave(file=paste0(img_dir, '/', '2_sleep_ripples_stats.pdf'), 
+       width=5, height=5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
 

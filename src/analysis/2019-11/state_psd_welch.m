@@ -9,8 +9,8 @@ use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
-is_baseline = 1;
-is_ymaze_trial = 0;
+is_baseline = 0;
+is_ymaze_trial = 1;
 
 secondOffset = 0;
 if is_ymaze_trial
@@ -28,9 +28,9 @@ end
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
+reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ripples.csv';
 if is_baseline
-    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
+    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_theta.csv';
 end
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
@@ -40,7 +40,7 @@ result_table = table();
 all_ripples = table();
 
 % Predefined frequencies
-all_bands = exp(0.1:0.07:5.6);
+all_bands = exp(0.1:0.035:5.6);
 min_section_dur_sec = 0.5;
 
 %% process single experiments
@@ -186,35 +186,23 @@ for i = 1:nexp
             ripples = ripples(keep_ripples,:);
         end
         
-        %[pxx, freqs] = pwelch(dataArray, ...
-        %    floor(fs / 4), floor(fs / 8), floor(fs / 2), fs);
-        [cws, freqs] = cwt(dataArray(channel,:), 'amor', fs);        
-        signal_pxx = abs(cws .^ 2);
-        freqs = fliplr(freqs')';
-        signal_pxx = fliplr(signal_pxx')';
-        
-        settings = struct();  % Use defaults
-        f_range = [1, 50];
 
-        % Run FOOOF
-        fooof_results = fooof(freqs, signal_pxx, f_range, settings);
-        
-        band_power = zeros(numel(all_bands), size(signal_pxx, 2));
-        for j=1:(numel(all_bands)-1)
-            if all_bands(j) >= freqs(1)
-                % Assign power of the first higher frequency
-                k = find(freqs >= all_bands(j), 1, 'first');
-                band_power(j,:) = signal_pxx(k, :);
-            end
-        end
-        band_power_zscored = zscore(band_power);
+%         band_power = zeros(numel(all_bands), size(signal_pxx, 2));
+%         for j=1:(numel(all_bands)-1)
+%             if all_bands(j) >= freqs(1)
+%                 % Assign power of the first higher frequency
+%                 k = find(freqs >= all_bands(j), 1, 'first');
+%                 band_power(j,:) = signal_pxx(k, :);
+%             end
+%         end
+%         band_power_zscored = zscore(band_power);
         
         for trial_period_i = 1:size(trialPeriods, 1)
             period_start = max(1, int32(trialPeriods.starts(trial_period_i)));
             period_end = min( size(dataArray, 2), ...
                               int32(trialPeriods.ends(trial_period_i)));
             period_signal = dataArray(channel, period_start : period_end);
-            period_pxx = signal_pxx(:, period_start : period_end);
+                
             sec_start = max(0, double(period_start) / fs);
             sec_end = double(period_end) / fs;
             %sec_end = min(sec_end,  size(dataArray, 2) / fs);
@@ -223,6 +211,8 @@ for i = 1:nexp
             if sec_length <= min_section_dur_sec
                 continue
             end
+            [period_pxx, freqs] = pwelch(period_signal, ...
+                hanning(fs/2), floor(fs / 4), all_bands, fs);
 
             warning('off', 'MATLAB:table:RowsAddedExistingVars');
             result_table.channel(entry_i) = channelTable.channel(channel);
@@ -258,10 +248,7 @@ for i = 1:nexp
             %result_table.pow_ripple_band(entry_i) = MeanBandPower(freqs, period_pxx, ripple_band);
             result_table.pow_ripple_band(entry_i) = CalcBandPower(fs, period_signal, ripple_band);
             for j=1:(numel(all_bands)-1)
-                result_table.all_psd_xx(entry_i, j) = ...
-                    mean(band_power(j, period_start : period_end));
-                result_table.all_psd_z(entry_i, j) = ...
-                    mean(band_power_zscored(j, period_start : period_end));
+                result_table.all_psd_xx(entry_i, j) = period_pxx(j);
             end
 
              section_ripples = [];
@@ -320,7 +307,7 @@ end
 
 %filename_infix = [filename_infix '_single_std'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
-writetable(result_table, [datarootdir filesep 'psd_table' outfile_suffix]);
+writetable(result_table, [datarootdir filesep 'welch_psd_table' outfile_suffix]);
 writetable(all_ripples, [datarootdir filesep 'ripples' outfile_suffix]);
             
 function [ pow ] = TotalBandPower(f1, pxx, band)
@@ -339,7 +326,6 @@ function [ pow ] = TotalBandPower2(f1, pxx, band)
 end
 
 function [ freq ] = PeakFreq(f1, pxx, band)
-    pxx = mean(pxx, 2);
     band_freqs_index = find(f1 >= band(1) & f1 <= band(2));
     [~, maxValIndex] = max(pxx(band_freqs_index));
     freqs = f1(band_freqs_index);

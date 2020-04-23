@@ -6,7 +6,7 @@ path = '/mnt/DATA/chat_ripples/baseline/2019-09-04/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-showFiltered = 0;
+showFiltered = 1;
 showDiode = 1;
 
 secondOffset = 2;
@@ -14,7 +14,7 @@ meta = ReadMeta(binName, path);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_theta.csv',...
     animal_code, meta);
 
 lengthSeconds = min(120, str2double(meta.fileTimeSecs) - secondOffset);
