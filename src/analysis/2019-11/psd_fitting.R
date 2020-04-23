@@ -9,8 +9,12 @@ fooof = reticulate::import('fooof')
 fooof.analysis = reticulate::import('fooof.analysis')
 fooof.synth = reticulate::import('fooof.synth')
 
-calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), show.fit=FALSE) {
-  fm = fooof$FOOOF(background_mode = 'knee', max_n_peaks = 8, verbose = TRUE,
+calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), show.fit=FALSE, fit.knee=TRUE) {
+  background.mode = 'fixed'
+  if (fit.knee) {
+    background.mode = 'knee'
+  }
+  fm = fooof$FOOOF(background_mode = background.mode, max_n_peaks = 8, verbose = TRUE,
                    peak_width_limits = c(1, 30))
   spectra.mat = np_array(c(sample.psd.df$band_power))
   freqs = np_array(sample.psd.df$band_start_freq)
@@ -68,7 +72,7 @@ test.psd.fitting = function() {
   fres
 }
 
-fit.background.df = function(psd.molten, freq.range = c(3.5, 80)) {
+fit.background.df = function(psd.molten, freq.bands.df, freq.range = c(3.5, 80), fit.knee=TRUE) {
   psd.entries = psd.molten %>% 
     dplyr::select(animal, trial_id, stage_desc, laserOn, channelLocation) %>%
     dplyr::distinct()
@@ -84,7 +88,9 @@ fit.background.df = function(psd.molten, freq.range = c(3.5, 80)) {
     #names(lowbands.pow.list) = paste('low', names(lowbands.pow.list),sep='_')
     highbands.pow.list = calc.bands.pow(entry.df, 
                                         freq.bands.df, #filter(freq.bands.df, band != 'theta'), 
-                                        freq.range = freq.range, show.fit = F)
+                                        freq.range = freq.range, 
+                                        show.fit = FALSE,
+                                        fit.knee = fit.knee)
     return(cbind(psd.entries[.x,], #lowbands.pow.list, 
                  highbands.pow.list))
   })
