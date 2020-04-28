@@ -27,7 +27,7 @@ diode.signal = TRUE
 if (diode.signal) {
   psddf.ymaze = read_csv(paste0(data_dir,'/','welch_psd_table_diode_th6.csv'))
 } else {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))  
+  psddf.ymaze = read_csv(paste0(data_dir,'/','welch_psd_table_th6.csv'))  
 }
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 
@@ -115,7 +115,6 @@ ggsave(paste0(img_dir, '/psd_zscore_giht.pdf'), units = 'cm',
 ```{r}
 animal.band.zscore %>%
   dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
-  #filter(learning_day >= 4)  %>%
   filter(stage_desc %in% c('GoalZone20sec')) %>%
   ggplot(aes(x=band_start_freq, y=mean.zscore, group=animal_laser)) +
   geom_line(aes(color=laserOn), size=1*px2pt) +
@@ -151,7 +150,7 @@ animal.psd %>%
 # Laser effect 
 ```{r}
 animals.psd = psd.molten %>%
-  filter(learning_day >= 5)  %>%
+  #filter(learning_day >= 5)  %>%
   #filter(animal == 'OS') %>%
   filter(stage_desc %in% c('GoalZone20sec')) %>%
   group_by(animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
@@ -202,13 +201,13 @@ ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean.pdf'),
 Overall PSD
 ```{r}
 all.psd = psd.molten %>%
-  filter(learning_day >= 5)  %>%
   group_by(channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.power = mean(log(band_power)),
                    sem.power = sem(log(band_power)))
 
 all.psd %>%
   filter(stage_desc %in% c('GoalZone20sec')) %>%
+  #filter(stage_desc %in% c('DuringStim')) %>%
   ggplot(aes(x=band_start_freq, y=mean.power, group=laserOn)) +
   geom_line(aes(color=laserOn), size=1*px2pt) +
   geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power, fill=laserOn), alpha=0.15) +
@@ -262,14 +261,14 @@ mean.band.pow.diff = calc.log.diff(band.pow.summary)
 Fit background with FOOOF and check quality
 ```{r}
 fit.psd.df = fit.background.df(
-  filter(psd.molten,learning_day >= 5, stage_desc == 'GoalZone20sec'),
+  filter(psd.molten,
+         #learning_day >= 5, 
+         stage_desc == 'GoalZone20sec'),
   freq.bands.df,
-  #freq.range = c(15, 120),
   freq.range = c(15, 150),
   fit.knee = FALSE)
 
 summary(fit.psd.df$fit_error)
-summary(fit.psd.df$low_fit_error)
 ```
 
 ```{r}
@@ -285,10 +284,13 @@ calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA3'), backgroun
 var = quo(pow_slow_gamma)
 fit.sgamma.present = filter(fit.psd.df) %>%
   dplyr::filter(!is.na(!!var))
-  #dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
-g.sgamma.pow = plot.laser.change(fit.sgamma.present, !!var) + ylab('Relative Slow Gamma Power (20 - 45 Hz; a.u.)')
+
+group_by(fit.sgamma.present, laserOn) %>%
+  dplyr::summarise(mean(!!var), sem(!!var))
+
+g.sgamma.pow = plot.laser.change(fit.sgamma.present, !!var) + ylab('Relative Slow Gamma Power (20 - 45 Hz; a.u.)') + ylim(c(0, 0.59))
 g.sgamma.pow
-calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var)
+calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA3'), !!var)
 ```
 
 
@@ -296,13 +298,14 @@ calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), !
 Fit background with FOOOF and check quality
 ```{r}
 fit.psd.df = fit.background.df(
-  filter(psd.molten,learning_day >= 5, stage_desc == 'GoalZone20sec'),
+  filter(psd.molten,
+         #learning_day >= 5, 
+         stage_desc == 'GoalZone20sec'),
   freq.bands.df,
   freq.range = c(2, 20),
   fit.knee = FALSE)
 
 summary(fit.psd.df$fit_error)
-summary(fit.psd.df$low_fit_error)
 ```
 
 Count of trials with theta:
@@ -322,9 +325,9 @@ Change in pow theta.
 ```{r}
 var = quo(pow_theta)
 fit.theta.present = filter(fit.psd.df) %>%
-  dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
+  dplyr::filter(!is.na(!!var))
 g.theta.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Theta Power (5 - 11 Hz; a.u.)')
-calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA3'), !!var)
+calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), !!var)
 g.theta.pow
 ```
 

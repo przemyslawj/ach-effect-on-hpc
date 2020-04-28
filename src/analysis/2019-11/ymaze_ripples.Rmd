@@ -17,7 +17,7 @@ data_dir = '/mnt/DATA/chat_ripples/y-maze/'
 img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 
 if (diode.signal) {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_diode_th6.csv'))
+  psddf.ymaze = read_csv(paste0(data_dir,'/','welch_psd_table_diode_th6.csv'))
   ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_diode_th6.csv'))
 } else {
   psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
@@ -62,15 +62,24 @@ Performance reached 70 %
 psddf.ymaze.correct = filter(psddf.ymaze, correct == 1)
 ```
 
-Filter animals with fewer ripples than one
+```{r}
+psddf.ymaze.correct %>%
+  filter(laserOn == 0, learning_day >= 1, stage_desc == 'Total', channelLocation == 'CA1') %>%
+  group_by(animal, learning_day) %>%
+  dplyr::summarise(has_ripples.pct=sum(swr_incidence > 0) / n(),
+                   mean.incidence = mean(swr_incidence)) 
+```
+
+
+Filter animals with few ripples (swr incidence < 0.02)
 ```{r}
 nripples.summary = psddf.ymaze.correct %>%
   filter(laserOn == 0, learning_day >= 1, stage_desc == 'Total', channelLocation == 'CA1') %>%
   group_by(animal) %>%
   dplyr::summarise(has_ripples.pct=sum(swr_incidence > 0) / n(),
-                   nripples.mean = mean(nripples)) 
+                   mean.incidence = mean(swr_incidence)) 
 psddf.ymaze.correct = filter(psddf.ymaze.correct, 
-                             animal %in% subset(nripples.summary, nripples.mean >= 1)$animal)
+                             animal %in% subset(nripples.summary, mean.incidence >= 0.03)$animal)
 ```
 
 Plot ripples over trial
@@ -109,10 +118,19 @@ ripples.sample %>%
        height=6, width=12)
 ```
 
+Ripple incidence over learning
+```{r}
+psddf.ymaze.correct %>%
+  filter(stage_desc == 'DuringStim') %>%
+  ggplot() +
+  geom_jitter(aes(x=learning_day, y=swr_incidence, color=laserOn), width=0.2) +
+  facet_grid(animal ~ channelLocation, scales='free')
+```
+
 
 ```{r}
 swr.ymaze.summary = psddf.ymaze.correct %>%
-  filter(learning_day >= 5)  %>%
+  filter(learning_day != 4)  %>%
   group_by(animal, laserOn, stage_desc, channelLocation) %>% 
   dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
                    swr_incidence.sem=sem(swr_incidence),
@@ -158,63 +176,28 @@ psddf.ymaze.correct %>%
 ```
 Significance testing
 ```{r}
-last2days.ymaze.correct = filter(psddf.ymaze.correct, 
-                                 learning_day >= 5,
-                                 channelLocation == 'CA3',
-                                 stage_desc == 'DuringStim')
+tested.ymaze.correct = filter(psddf.ymaze.correct, 
+                              learning_day != 4, # Exclude the day when laser was turned off.
+                              #laserOn == 0,
+                              channelLocation == 'CA1',
+                              stage_desc == 'DuringStim') %>%
+  dplyr::mutate(early.learning=(learning_day < 5))
+# Count of trials per animal
+tested.ymaze.correct %>% group_by(animal, channelLocation, laserOn) %>%
+  dplyr::summarise(n=n()) %>%
+  group_by(laserOn) %>% 
+  dplyr::summarise(mean(n), sem(n))
+
+tested.ymaze.correct %>% group_by(laserOn) %>%
+  dplyr::summarise(mean(swr_incidence), sem(swr_incidence))
+
 m.full = lmerTest::lmer(swr_incidence ~ laserOn + (1 + laserOn | animal), 
-                        data=last2days.ymaze.correct, 
+                        data=tested.ymaze.correct, 
                         REML = TRUE) 
-plot.model.diagnostics(m.full, last2days.ymaze.correct$animal, last2days.ymaze.correct$laserOn) 
+plot.model.diagnostics(m.full, tested.ymaze.correct$animal, tested.ymaze.correct$early.learning) 
 summary(m.full)
 coef(m.full)$animal
 anova(m.full, refit=FALSE, ddf='Satterthwaite')
 ```
 
-
-
-When do ripples happen: pct of runs with ripples during the stage
-```{r}
-swr.ymaze.summary %>% 
-#psddf.ymaze.correct %>%
-  filter(laserOn == 0, learning_day == 6) %>%
-  filter(stage_desc %in% c('DuringStim', 'StartZone', 'FirstArm', 'BeforeGoalZone')) %>%
-  ggplot() +
-  facet_grid(date ~ .) +
-  geom_jitter(aes(x=stage_desc, y=has_ripples.pct, color=stage_desc))
-
-```
-
-Ripples during a single trial
-```{r}
-psddf.ymaze.correct %>% 
-  filter(learning_day == 6) %>%
-  filter(laserOn == 0) %>%
-  filter(stage_desc %in% c('StartZone', 'DuringStim')) %>% 
-  dplyr::mutate(date_trial = paste(animal, format(date), file_name, sep='_')) %>%
-  dplyr::select(animal, date, date_trial, stage_desc, nripples, swr_incidence, correct, channelLocation) %>%  
-  ggplot(aes(x=stage_desc, y=nripples, group=date_trial, color=animal)) +
-  geom_line() +
-  geom_point() +
-  facet_grid(correct ~ channelLocation)
-```
-
-Ripples conclusion:
-CA1 DuringStim:
-  signif lower for th=6 when filtered 80-250, 
-  signif lower for th=5 when filtered 100-250, signif for learning_day>=5
-CA3 no signif, 
-  v few ripples at 150-250Hz in CA3 th6 or th5, not signif
-
-
-TODOs: 
-[x] Ripples figure: 
-   [x] location of SWRs: x - time, y- # trial, point for ripple
-   [x] Spectrogram on ymaze? avg for a day
-[x] not seen 20-50Hz oscillations at reward for CA3
-[x] look at ymaze % correct to justify choice of learning day 5 and 6 for ripples comparioson
-[x] look at the found ripples - are they good quality? are they long enough?
-[x] look at all channels
-[x] coherence between CA1 and CA3
-[x] exclude SWRs during movement as detected from EMG
 

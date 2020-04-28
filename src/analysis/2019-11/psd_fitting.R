@@ -50,8 +50,9 @@ calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), s
   #y = 10^offset * (1/(knee + x^exp))
   if (show.fit) {
     fm$print_results()
-    matplot(fm$freqs, cbind(fm$power_spectrum, fm$fooofed_spectrum_, fm[['_bg_fit']]), 
-            type='l',lty=1:5, log = "x")
+    matplot(fm$freqs, 
+            cbind(fm$power_spectrum, fm$fooofed_spectrum_, fm[['_bg_fit']]), 
+            type='l', lty=1:5, log = "x", main=paste(sample.psd.df$animal[1], sample.psd.df$channelLocation[1], 'laser =', sample.psd.df$laser[1]))
     res$fm = fm
   }
   return(res)
@@ -72,9 +73,15 @@ test.psd.fitting = function() {
   fres
 }
 
-fit.background.df = function(psd.molten, freq.bands.df, freq.range = c(3.5, 80), fit.knee=TRUE) {
+fit.background.df = function(psd.molten, 
+                             freq.bands.df, 
+                             freq.range = c(3.5, 80), 
+                             fit.knee=TRUE, 
+                             show.fit=FALSE,
+                             extra.group.vars=c()) {
+  id.vars = c('animal', 'trial_id', 'stage_desc', 'laserOn', 'channelLocation')
   psd.entries = psd.molten %>% 
-    dplyr::select(animal, trial_id, stage_desc, laserOn, channelLocation) %>%
+    dplyr::select(c(id.vars, extra.group.vars)) %>%
     dplyr::distinct()
   
   fit.psd.df = map_dfr(1:nrow(psd.entries), ~ {
@@ -89,8 +96,9 @@ fit.background.df = function(psd.molten, freq.bands.df, freq.range = c(3.5, 80),
     highbands.pow.list = calc.bands.pow(entry.df, 
                                         freq.bands.df, #filter(freq.bands.df, band != 'theta'), 
                                         freq.range = freq.range, 
-                                        show.fit = FALSE,
+                                        show.fit = show.fit,
                                         fit.knee = fit.knee)
+    highbands.pow.list$fm = NA
     return(cbind(psd.entries[.x,], #lowbands.pow.list, 
                  highbands.pow.list))
   })

@@ -1,6 +1,6 @@
 %% setup results
 rootdir = '/mnt/DATA/Clara/urethane/';
-experiment = 'inhibition';
+experiment = 'scopolamine';
 datarootdir = [ rootdir experiment filesep ];
 
 txtfiles = dir([datarootdir filesep '*.txt']);
@@ -13,6 +13,7 @@ nexp = size(txtfiles, 1);
 result_table = table();
 
 all_ripples = table();
+all_bands = exp(0.1:0.035:5.6) - 1;
 
 result_table.animal = repmat('XXXXXX', nexp * 3 * nchans, 1);
 
@@ -20,7 +21,6 @@ result_table.row = zeros(nexp * 3 * nchans, 1);
 result_table.trial = zeros(nexp * 3 * nchans, 1);
 result_table.laserOn = zeros(nexp * 3 * nchans, 1);
 result_table.channel = zeros(nexp * 3 * nchans, 1);
-all_bands = [0.1 0.5 1 1.5, exp(0.7:0.05:5.3)];
 result_table.all_psd_xx = zeros(nexp * 3 * nchans, numel(all_bands));
 
 result_table.pow_slow = zeros(nexp * 3 * nchans, 1);
@@ -54,19 +54,17 @@ for i = 1:nexp
     dataArray = dataArray';
     lengthSeconds = size(dataArray, 2) / fs;
 
-%     rec_times = [0 15;
-%                  15 30;
-%                  45 60; ];    
-    rec_times = [0 60;
-                 60 120;
-                 120 180; ];
+    rec_times = [0 15;
+                 15 30;
+                 45 60; ];    
+%    rec_times = [0 60;
+%                 60 120;
+%                 120 180; ];
 
     time = (1:size(dataArray,2)) / fs;
 
     %dataArray = filter50Hz(dataArray, fs);
     channel_std = std(dataArray, [], 2);
-    downfs = 500;
-    downsampledDataArray = downsample(dataArray', round(fs / downfs))';
 
     % Filter LFP for SWR detection
     filtered = zeros(size(dataArray));
@@ -78,6 +76,8 @@ for i = 1:nexp
     for chan = 1:nchans
         filtered(chan,:) = filtfilt(b, a, dataArray(chan,:));
     end
+    
+    stage_descs = {'before_stim', 'stim', 'after_stim'};
 
     %% calculate PSD
 
@@ -105,29 +105,31 @@ for i = 1:nexp
             result_table.animal(entry_i,:) = animal;
             result_table.trial(entry_i) = i;
             result_table.laserOn(entry_i) = mod(rec_times_i - 1, 2);
+            result_table.stage_desc(entry_i) = stage_descs(rec_times_i);
 
-            psd_xx = downsampledDataArray(channel,sec_start * downfs + 1:sec_end * downfs);
+            psd_xx = dataArray(channel,...
+                sec_start * fs + 1:min(size(dataArray,2), sec_end * fs));
 
-            %[pxx, freqs] = pwelch(psd_xx, ...
-            %    floor(downfs / 4), floor(downfs / 8), floor(downfs / 2), downfs);
-            [cws, freqs] = cwt(psd_xx, 'amor', downfs);        
-            pxx = median(abs(cws .^ 2), 2);
-            freqs = fliplr(freqs')';
-            pxx = fliplr(pxx')';
+            [pxx, freqs] = pwelch(psd_xx, ...
+                hanning(fs/2), floor(fs / 4), all_bands, fs);
+            %[cws, freqs] = cwt(psd_xx, 'amor', fs);        
+            %pxx = median(abs(cws .^ 2), 2);
+            %freqs = fliplr(freqs')';
+            %pxx = fliplr(pxx')';
 
             [maxVal, maxValIndex] = max(pxx);
             result_table.dom_freq(entry_i) = freqs(maxValIndex);
 
-            result_table.pow_slow(entry_i) = TotalBandPower(freqs, pxx, slow);
-            result_table.pow_theta(entry_i) = TotalBandPower(freqs, pxx, theta);
+            result_table.pow_slow(entry_i) = CalcBandPower(fs, pxx, slow);
+            result_table.pow_theta(entry_i) = CalcBandPower(fs, pxx, theta);
             result_table.peak_theta(entry_i) = PeakFreq(freqs, pxx, theta);
-            result_table.pow_slow_gamma(entry_i) = TotalBandPower(freqs, pxx, slow_gamma);
+            result_table.pow_slow_gamma(entry_i) = CalcBandPower(fs, pxx, slow_gamma);
             result_table.peak_slow_gamma(entry_i) = PeakFreq(freqs, pxx, slow_gamma);
-            result_table.pow_med_gamma(entry_i) = TotalBandPower(freqs, pxx, med_gamma);
-            result_table.pow_fast_gamma(entry_i) = TotalBandPower(freqs, pxx, fast_gamma);
-            result_table.pow_above_theta(entry_i) = TotalBandPower(freqs, pxx, above_theta);
+            result_table.pow_med_gamma(entry_i) = CalcBandPower(fs, pxx, med_gamma);
+            result_table.pow_fast_gamma(entry_i) = CalcBandPower(fs, pxx, fast_gamma);
+            result_table.pow_above_theta(entry_i) = CalcBandPower(fs, pxx, above_theta);
             for j=1:(numel(all_bands)-1)
-                result_table.all_psd_xx(entry_i, j) = TotalBandPower(freqs, pxx, [all_bands(j) all_bands(j+1)]);
+                result_table.all_psd_xx(entry_i, j) = pxx(j);
             end
 
              filtered_start_i = sec_start * fs + 1;
@@ -137,7 +139,7 @@ for i = 1:nexp
                      (filtered(channel, filtered_start_i : filtered_end_i))', ...
                      'frequency', fs, ...
                      'thresholds', [2 4.0 0.01], ...
-                     'durations', [10 30 400], ....
+                     'durations', [10 20 300], ....
                      'std', sd);
              nripples = size(section_ripples, 1);
              if ~isempty(section_ripples)
@@ -151,6 +153,7 @@ for i = 1:nexp
                 ripples_table.Properties.VariableNames = {'start_sec', 'peak_t', 'end_time', 'peakpow', 'peak_freq'};
                 ripples_table.trial = repmat(i, nripples, 1);
                 ripples_table.laserOn = repmat(result_table.laserOn(entry_i), nripples, 1);
+                ripples_table.stage_desc = repmat(stage_descs(rec_times_i), nripples, 1);
  
                 all_ripples = [all_ripples; ripples_table];
              end
@@ -162,12 +165,16 @@ for i = 1:nexp
     end
 end
 
-writetable(result_table, [rootdir filesep 'psd_table_urethane_' experiment '.csv']);
+writetable(result_table, [rootdir filesep 'welch_psd_table_urethane_' experiment '.csv']);
 writetable(all_ripples, [rootdir filesep 'ripples_urethane_' experiment '.csv']);
             
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
     pow = bandpower(pxx,f1,band,'psd');
+end
+
+function [ pow ] = CalcBandPower(fs, signal, band)
+    pow = bandpower(signal, fs, band);
 end
 
 function [ freq ] = PeakFreq(f1, pxx, band)

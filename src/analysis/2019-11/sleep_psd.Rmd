@@ -91,10 +91,11 @@ freq.bands.df = data.frame(
 ```
 
 # Effects on the signal spectrum
+Trials per moues
 ```{r}
-psddf = mutate(psddf,
-                    theta_over_slow = pow_theta / pow_slow,
-                    theta_over_supratheta = pow_theta / pow_above_theta)
+psddf %>% group_by(animal) %>%
+  dplyr::summarise(ntrials=length(unique(trial_id))) %>%
+  dplyr::summarise(mean(ntrials), sem(ntrials),)
 ```
 
 
@@ -443,6 +444,19 @@ calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA3'), backgroun
 ```
 
 ## Slow Gamma
+Count of trials with slow gamma:
+```{r}
+var = quo(pow_sm_gamma)
+pct.theta.oscillating = group_by(fit.psd.df, channelLocation, animal, laserOn) %>%
+  dplyr::summarise(pct.oscillating=sum(!is.na(!!var)) / n())
+pct.theta.oscillating
+ca.subset = subset(pct.theta.oscillating, channelLocation == 'CA1')
+t.test(subset(ca.subset, laserOn==0)$pct.oscillating,
+       subset(ca.subset, laserOn==1)$pct.oscillating, 
+       paired=TRUE)
+group_by(pct.theta.oscillating, channelLocation, laserOn) %>% dplyr::summarise(mean(pct.oscillating), sem(pct.oscillating))
+```
+
 Significant increase in slow gamma for CA1
 ```{r}
 var = quo(pow_slow_gamma)
@@ -450,19 +464,22 @@ fit.sgamma.present = fit.psd.df %>%
   dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
 g.sgamma.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Slow Gamma Power (20 - 45 Hz; a.u.)')
 g.sgamma.pow
-calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var)
+calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA3'), !!var)
 ```
 SGamma central frequency when the laser on...
 ```{r}
-var = quo(peak_sm_gamma)
-fit.sgamma.present %>%
-  group_by(channelLocation, laserOn, animal) %>%
-  dplyr::summarise(peak.mean = mean(!!var, na.rm=T),
-                   peak.median = median(!!var, na.rm=T),
-                   peak.sem = sem(!!var))
+peak_var = quo(peak_slow_gamma)
 
-plot.laser.change(fit.psd.df, !!var) + ylab('Central Slow Gamma frequency (Hz)')
-calc.laser.fixed.effects(filter(fit.sgamma.present, channelLocation == 'CA3', !is.na(!!var)), !!var)
+filter(fit.psd.df, !is.na(!!peak_var)) %>%
+  group_by(animal, channelLocation, laserOn) %>% 
+  dplyr::summarise(peak.mean = mean(!!peak_var),
+                   peak.median = median(!!peak_var),
+                   peak.sem = sem(!!peak_var)) %>% 
+  dplyr::group_by(channelLocation, laserOn) %>%
+  dplyr::summarise(mean(peak.mean), sem(peak.mean))
+
+plot.laser.change(fit.psd.df, !!peak_var) + ylab('Central Slow Gamma frequency (Hz)')
+calc.laser.fixed.effects(filter(fit.sgamma.present, channelLocation == 'CA3', !is.na(!!peak_var)), !!peak_var)
 ```
 ## Theta
 Fit background with FOOOF and check quality
@@ -493,16 +510,18 @@ fit.theta.present = fit.psd.df %>%
   #dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
 g.theta.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Theta Power (5 - 11 Hz; a.u.)')
 g.theta.pow
-calc.laser.fixed.effects(filter(fit.theta.present, channelLocation == 'CA1'), !!var)
+calc.laser.fixed.effects(filter(fit.theta.present, channelLocation == 'CA3'), !!var)
 ```
 Lower theta central frequency when the laser on...
 ```{r}
 peak_var = quo(peak_theta)
 filter(fit.psd.df, !is.na(!!peak_var)) %>%
-  group_by(channelLocation, laserOn) %>%
+  group_by(animal, channelLocation, laserOn) %>%
   dplyr::summarise(peak_theta.mean = mean(!!peak_var),
                    peak_theta.median = median(!!peak_var),
-                   peak_theta.sem = sem(!!peak_var))
+                   peak_theta.sem = sem(!!peak_var)) %>%
+  dplyr::group_by(channelLocation, laserOn) %>%
+  dplyr::summarise(mean(peak_theta.mean), sem(peak_theta.mean))
 
 plot.laser.change(fit.psd.df, !!peak_var) + ylab('Central Theta frequency (Hz)')
 calc.laser.fixed.effects( filter(fit.psd.df, !is.na(!!peak_var), channelLocation == 'CA1'), !!peak_var)
@@ -514,10 +533,3 @@ ggsave(file=paste0(img_dir, '/', '2_psd_stats.pdf'),
        width=12, height=5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
-
-TODO: 
-[] Should check count of trials with and wo theta / sgamma. check signif with bernoulli test?
-[] Run on single electrode..
-[x] Plot changes for indiv animals same as for ripples
-[x] Should calculate aperiodic activity as area under background
-[x] Need to control for the fit of the PSD, and choose fit params based on that

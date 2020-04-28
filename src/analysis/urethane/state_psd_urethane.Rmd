@@ -330,8 +330,6 @@ gbands
 ```
 
 
-Increase in ~50Hz for K2 and others in sleep. Try to see if artifact or not by adding 50Hz noise and seeing how differs?
-
 ```{r}
 psddf.on = psddf %>%
   group_by(trial_id) %>%
@@ -540,10 +538,7 @@ ggsave(file=paste0(img_dir, '/', '6_baseline_theta_over_slow.svg'), gtheta.over.
 
 
 #Effect of the laser on ripples
-
-
 The detected events have their frequency peak around ~120Hz as expected in CA3.
-TODO: present as percentages
 
 ```{r include=TRUE}
 ripple.df %>%

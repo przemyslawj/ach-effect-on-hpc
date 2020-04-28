@@ -8,9 +8,9 @@ ripple_std_thr = 6;
 use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
-is_after_ymaze = 0;
+is_after_ymaze = 1;
 is_baseline = 0;
-is_ymaze_trial = 1;
+is_ymaze_trial = 0;
 
 secondOffset = 0;
 if is_ymaze_trial
@@ -24,8 +24,10 @@ if is_urethane
     datarootdir = '/mnt/DATA/chat_ripples/urethane';
 end
         
-
 trials_fpath = [datarootdir filesep 'trials.csv'];
+if is_after_ymaze
+    trials_fpath = [datarootdir filesep 'trials_after.csv'];
+end
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
 reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ripples.csv';

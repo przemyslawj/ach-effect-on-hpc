@@ -236,6 +236,8 @@ ggsave(paste0(img_dir, 'wtlearnt_boxplot.pdf'), width=5.5,
 
 ```
 ```{r}
+shapiro.test(subset(wtdf.learnt, cond == 'No stim')$learnt.day)
+shapiro.test(subset(wtdf.learnt, cond == 'Goal')$learnt.day)
 t.test(learnt.day ~ cond, data=wtdf.learnt)
 ```
 Joined ChAT and WT
