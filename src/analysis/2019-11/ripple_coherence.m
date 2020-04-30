@@ -1,19 +1,28 @@
 % Cohererence of CA1 and CA3 during CA3 ripple
 
 %% setup results
+ripple_std_thr = 6;
 use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
-%datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-%is_ymaze_trial = 1;
-%secondOffset = 2.5;
-datarootdir = '/mnt/DATA/chat_ripples/baseline';
-is_ymaze_trial = 0;
+is_baseline = 0;
+is_ymaze_trial = 1;
+
 secondOffset = 0;
+if is_ymaze_trial
+    datarootdir = '/mnt/DATA/chat_ripples/y-maze';
+    secondOffset = 3;
+end
+if is_baseline
+    datarootdir = '/mnt/DATA/chat_ripples/baseline';
+end
+if is_urethane
+    datarootdir = '/mnt/DATA/chat_ripples/urethane';
+end
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
-ripples_fpath = [datarootdir filesep 'ripples_diode_th6.csv'];
+ripples_fpath = [datarootdir filesep 'trial_results' filesep 'ripples_diode_th6.csv'];
 ripples_table = readtable(ripples_fpath, 'ReadVariableNames', true);
 
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
@@ -234,12 +243,9 @@ if ~selected_channels_only
 end
 
 outfile_suffix = [filename_infix '.csv'];
-writetable(result_table, [datarootdir filesep 'ripple_coherence_table' outfile_suffix]);
+outdir = [datarootdir filesep 'trial_results'];
+writetable(result_table, [outdir filesep 'ripple_coherence_table' outfile_suffix]);
 
-function [ mcoh ] = CoherenceMean(freqs, wcoh, band)
-    band_freqs = freqs >= band(1) & freqs <= band(2);
-    mcoh = mean(mean(wcoh(band_freqs,:),2));
-end
 
 function [ pow ] = CoherenceMean2(freqs, wcoh, band)
     band_freqs_i = find(freqs >= band(1) & freqs <= band(2));

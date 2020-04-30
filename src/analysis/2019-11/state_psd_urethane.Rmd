@@ -1,0 +1,365 @@
+---
+title: "Effect of cholinergic stimulation on CA3"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(include=FALSE, collapse=TRUE, warning=FALSE, echo=FALSE)
+```
+
+```{r include=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(cowplot)
+library(ggpubr)
+select = dplyr::select
+
+sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
+```
+
+
+```{r include=FALSE}
+px2pt = 1/(ggplot2::.pt*72.27/96)
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=8, family = 'Arial'), 
+        panel.background = element_rect(fill = 'white'),
+        line = element_line(size = px2pt),
+        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.text.x=element_text(size=8, colour = "black"),
+        axis.text.y=element_text(size=8, colour = "black"),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8))
+
+col_width = 8.5 
+laser.col='#0098ffff'
+nolaser.col='grey30'
+scop.col = '#f8766dff'
+inh.col = '#6dc62eff'
+img_dir = '~/Dropbox/phd/ymaze_chat_x_ai32/img_gen/urethane/'
+
+freq.bands.df = data.frame(
+  band=c('theta', 'slow gamma'),
+  xmin=c(2.5, 20),
+  xmax=c(5, 40)
+)
+```
+
+
+```{r include=FALSE}
+data_dir = '/mnt/DATA/Clara/urethane'
+psddf.light = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_urethane_light.csv', sep='/')) %>%
+  mutate(state = 'Light')
+  #filter(trial != 7)
+psddf.scopolamine = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_urethane_scopolamine.csv', sep='/')) %>%
+  mutate(state = 'Scopolamine') 
+  #filter(trial != 8) %>%
+  #filter(trial != 9)
+
+#psddf.inh = read_csv(paste0(data_dir,'/','psd_table_urethane_inhibition.csv')) %>%
+#  mutate(state = 'Inhibition') #%>%
+  #filter(trial != 2) 
+
+#psddf = bind_rows(psddf.inh)
+psddf = bind_rows(psddf.light, psddf.scopolamine)
+
+psddf$state = as.factor(psddf$state)
+
+psddf = psddf %>%
+  mutate(trial_id=paste(state, trial ,sep='_')) %>%
+  mutate(stage_desc=ifelse(laserOn==1, 'stim', ifelse(row %% 3 == 1, 'before_stim', 'after_stim')))
+  
+psddf$trial_id = as.factor(psddf$trial_id)
+psddf$animal = as.factor(psddf$animal)
+psddf$date = '2018-01-01'
+psddf$channelLocation = 'CA3'
+psddf$laserOn = as.factor(psddf$laserOn)
+
+psd.molten = melt.freq.bands(psddf, extra.id.vars = c('state'),
+                             freq.bands = c(exp(seq(0.1, 5.6, by=0.035))) - 1)
+```
+
+```{r}
+library(purrr)
+animals.psd = psd.molten %>%
+  filter(stage_desc %in% c('stim', 'before_stim')) %>%
+  group_by(channelLocation, animal, laserOn, stage_desc, state, band_start_freq) %>%
+  dplyr::summarise(sem.power = sem(log(band_power)), 
+                   band_power = mean(log(band_power)))
+
+animals.psd %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, y=band_power, 
+                group=laserOn, color=laserOn)) +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-20, ymax=15, alpha=0.05, fill='grey10') +
+  facet_wrap(animal ~ state, scales = 'free') +
+  scale_x_log10(limits=c(0.5,100), breaks=axis.breaks, labels=axis.labels) +
+  scale_color_manual(values = c(nolaser.col, laser.col)) +
+  #scale_y_continuous(breaks=c(-15,-10))+
+  gtheme +
+  theme(legend.position = 'none') +
+  xlab('Frequency (Hz)') + ylab('Log power (a.u.)')
+
+ggsave(file=paste0(img_dir, '/', '4_psd_urethane.pdf'), 
+       width=16, height=14, unit='cm', dpi=300, device=cairo_pdf)
+```
+
+## Fit theta
+```{r}
+fit.psd.df = fit.background.df(filter(psd.molten, stage_desc != 'after_stim'), 
+                               freq.bands.df, 
+                               #c(1.2, 15), 
+                               c(1, 40),
+                               fit.knee = FALSE, show.fit=TRUE, extra.group.vars = c('state'))
+fit.psd.df$laserOn = as.factor(fit.psd.df$laserOn)
+
+summary(fit.psd.df$fit_error)
+fit.psd.df = fit.psd.df %>%
+  replace_na(list(pow_theta=0, pow_slow_gamma=0))
+```
+
+```{r}
+var = quo(pow_theta)
+g.theta.power = fit.psd.df %>%
+  filter(stage_desc != 'after_stim') %>%
+  ggplot(aes(x=laserOn, y=!!var, group=trial_id)) +
+  #geom_jitter(aes(color=animal), height = 0, width=0.2) +
+  geom_line() +
+  facet_grid(. ~ state) +
+  gtheme +
+  scale_x_discrete(labels=c('off', 'on')) +
+  ylab('Relative Theta Power (2.5 - 5 Hz)') + xlab('Stimulation')
+g.theta.power
+
+wilcox.test(pow_theta ~ laserOn, fit.psd.df, subset = state == 'Light', paired=TRUE)
+shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 0)$pow_theta)
+shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 1)$pow_theta)
+
+wilcox.test(pow_theta ~ laserOn, fit.psd.df, subset = state == 'Scopolamine', paired=TRUE)
+shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 0)$pow_theta)
+shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 1)$pow_theta)
+```
+## Aperiodic Background
+
+```{r}
+var = quo(background_auc)
+g.bac.auc = fit.psd.df %>%
+  filter(stage_desc != 'after_stim') %>%
+  ggplot(aes(x=laserOn, y=!!var, group=trial_id)) +
+  geom_line() +
+  facet_grid(. ~ state) +
+  gtheme +
+  scale_x_discrete(labels=c('off', 'on')) +
+  ylab('Background spectrum AUC (1 - 40 Hz)') + xlab('Stimulation')
+
+wilcox.test(background_auc ~ laserOn, fit.psd.df, subset = state == 'Light', paired=TRUE)
+shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 0)$background_auc)
+shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 1)$background_auc)
+
+wilcox.test(background_auc ~ laserOn, fit.psd.df, subset = state == 'Scopolamine', paired=TRUE)
+shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 0)$background_auc)
+shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 1)$background_auc)
+```
+
+
+## Fit slow gamma
+```{r}
+fit.psd.df = fit.background.df(filter(psd.molten, stage_desc != 'after_stim'), 
+                               freq.bands.df, c(8, 40), 
+                               fit.knee = FALSE, show.fit=TRUE, extra.group.vars = c('state'))
+fit.psd.df$laserOn = as.factor(fit.psd.df$laserOn)
+
+summary(fit.psd.df$fit_error)
+fit.psd.df = fit.psd.df %>%
+  replace_na(list(pow_theta=0, pow_slow_gamma=0))
+```
+
+```{r}
+var = quo(pow_slow_gamma)
+g.sgamma.power = fit.psd.df %>%
+  filter(stage_desc != 'after_stim') %>%
+  ggplot(aes(x=laserOn, y=!!var, group=trial_id)) +
+  geom_line() +
+  facet_grid(. ~ state) +
+  gtheme +
+  scale_x_discrete(labels=c('off', 'on')) +
+  ylab('Relative Gamma Power (20 - 40 Hz)') + xlab('Stimulation')
+g.sgamma.power
+
+wilcox.test(pow_slow_gamma ~ laserOn, fit.psd.df, subset = state == 'Light', paired=TRUE)
+shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 0)$pow_slow_gamma)
+shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 1)$pow_slow_gamma)
+
+wilcox.test(pow_slow_gamma ~ laserOn, fit.psd.df, subset = state == 'Scopolamine', paired=TRUE)
+shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 0)$pow_slow_gamma)
+shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 1)$pow_slow_gamma)
+```
+
+```{r}
+plot_grid(g.bac.auc, g.theta.power, g.sgamma.power, ncol=3)
+ggsave(file=paste0(img_dir, '/', '4_urethane_psd_stats.pdf'), 
+       width=12, height=4, unit='cm', dpi=300, device=cairo_pdf)
+```
+
+
+#Effect of the laser on ripples
+
+```{r include=FALSE}
+ripple.df.light = read_csv(paste0(data_dir,'/','ripples_urethane_light.csv')) %>%
+  mutate(cond = 'Light') 
+  #filter(trial != 7)
+ripple.df.scopolamine = read_csv(paste0(data_dir,'/','ripples_urethane_scopolamine.csv')) %>%
+  mutate(cond = 'Scopolamine') 
+  #filter(trial != 1)
+#ripple.df.nolight = read_csv(paste0(data_dir,'/','ripples_urethane_no_light.csv')) %>%
+#  mutate(cond = 'No_light') 
+ripple.df.inh = read_csv(paste0(data_dir,'/','ripples_urethane_inhibition.csv')) %>%
+  mutate(cond = 'Inhibition')  
+  #filter(trial != 2) 
+
+#ripple.df = bind_rows(ripple.df.inh) %>%
+ripple.df = bind_rows(ripple.df.light, ripple.df.scopolamine) %>%
+  mutate(trial_id=paste(cond, trial ,sep='_')) %>%
+  mutate(ripple_dur=end_time-start_sec)
+  #filter(state == 'sleep')
+  filter(trial != 'xx')
+ripple.df$cond = as.factor(ripple.df$cond)
+ripple.df$laserOn = as.factor(ripple.df$laserOn)
+```
+
+
+
+The detected events have their frequency peak around ~120Hz as expected in CA3.
+TODO: present as percentages
+
+```{r include=TRUE}
+ripple.df %>%
+  ggplot() +
+  geom_histogram(aes(x=peak_freq, color=cond, y=..density..), fill='white', alpha=0.4) +
+  scale_x_continuous(breaks=c(100, 120, 140, 160, 180, 200))
+```
+```{r}
+var = quo(peak_freq)
+ripple.df %>%
+  group_by(stage_desc) %>%
+  dplyr::summarise(mean(!!var), sem(!!var))
+```
+
+
+```{r include=TRUE}
+xlabels = c('0 - 15 s', '15 - 30 s')
+xlabels = c('0 - 60 s', '60 - 120 s')
+#xlabels = c(xlabels, '', xlabels)
+paired.psddf.all %>%
+  filter(desc != '3_after') %>%
+  ggplot() +
+  geom_line(aes(x=desc, y=swr_incidence, color=cond, group=trial_id), 
+            size=0.6, alpha=1, linetype=1) +
+  scale_x_discrete(labels = xlabels) +
+  scale_color_manual(labels=c('Control', '+Scopolamine', '+Scopolamine diff'), values=c(laser.col, scop.col, 'black')) +
+  #scale_color_manual(labels=c('Control'), values=c(inh.col)) +
+  ylab('Ripple incidence (Hz)') + 
+  facet_grid(. ~ cond) +
+  xlab('') +
+  labs(colour='') +
+  gtheme + 
+  theme(#legend.position = 'top',
+        legend.position = 'none',
+        axis.text.x=element_text(angle = 30, hjust = 1)) 
+
+#ggsave(file=paste0(img_dir, '/', '7_ripple_incidence_bar', cond_name, '.pdf'),
+#       width=col_width, height=7, unit='cm', dpi=300, device=cairo_pdf)
+ggsave(file=paste0(img_dir, '/', '7_ripple_incidence_bar', cond_name, '.pdf'),
+       width=4, height=6.5, unit='cm', dpi=300, device=cairo_pdf)
+```
+
+```{r}
+paired.psddf.all %>%
+  group_by(paired_group) %>%
+  summarise(mean.swr = mean(swr_incidence) %>% round(2), 
+            median.swr=median(swr_incidence) %>% round(2), 
+            sem.swr=sem(swr_incidence) %>% round(2),
+            mean.theta_freq = mean(peak_theta) %>% round(2),
+            sem.theta_freq=sem(peak_theta) %>% round(2),
+            mean.sgamma_freq = mean(peak_slow_gamma) %>% round(2),
+            sem.sgamma_freq = sem(peak_slow_gamma) %>% round(2))
+  
+
+paired.psddf.all %>%
+  filter(desc %in% c('1_before','2_stim')) %>%
+  group_by(cond, trial_id) %>%
+  arrange(desc) %>%
+  dplyr::summarise(swrdiff = diff(swr_incidence) / swr_incidence[1]) %>%
+  group_by(cond) %>%
+  dplyr::summarise(mean.swrdiff = mean(swrdiff) %>% round(2),
+                   med.swrdiff = median(swrdiff) %>% round(2),
+                   sem.swrdiff = sem(swrdiff) %>% round(2))
+```
+
+
+```{r}
+paired.psddf.all %>%
+  filter(desc != '3_after', cond == 'Light') -> wilcox.dat
+wilcox.test(pow_theta ~ paired_group, wilcox.dat, paired=TRUE)
+```
+
+```{r}
+plot.diagnostics = function(x) {
+  qqnorm(x)
+  qqline(x)
+}
+
+x=subset(wilcox.dat, desc == '2_stim')$swr_incidence
+plot.diagnostics(x)
+shapiro.test(x)
+y=subset(wilcox.dat, desc == '1_before')$swr_incidence
+plot.diagnostics(y)
+shapiro.test(y)
+
+t.test(swr_incidence ~ paired_group, wilcox.dat, paired=TRUE)
+```
+
+Histogram of the ripples over time - the laser active at 20-40 sec
+
+```{r include=TRUE}
+source('../bin_ripples.R')
+
+cond_name = 'Light'
+ripple.df$animal = as.factor(ripple.df$trial)
+ripple.df$state = factor('urethane')
+ripple.df$channelLocation = factor('CA3')
+ripple.df$channelName = factor('CA3')
+ripple.df$date = factor('2019-01-01')
+binned.ripple.df = filter(ripple.df, cond == cond_name) %>% bin.ripples(bin_dur=10)
+
+incidence.summary = binned.ripple.df %>%
+  mutate(laserOn = (bin_sec > 15 & bin_sec <= 45)) %>%
+  group_by(bin_sec, laserOn) %>%
+  summarise(mincidence = mean(incidence, na.rm = TRUE),
+            incidence.sd = sem(incidence))
+
+
+g = ggplot(incidence.summary, aes(x=bin_sec, y=mincidence)) +
+  geom_col(fill='gray', colour='black') +
+  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd), width=1.2) +
+  ylab('Ripple\nincidence (Hz)') +
+  xlab('Time (s)') +
+  #scale_fill_manual(values = c("grey", "#56B4E9")) +
+  #scale_x_continuous(breaks=seq(15,50,15), minor_breaks=seq(5,55,5))  +
+  #scale_y_continuous(breaks=c(0, 0.2, 0.4)) +
+  scale_x_continuous(breaks=c(60,120), minor_breaks=c(60,120), limits = c(0,140))  +
+  #ylim(c(0,0.55)) +
+  gtheme +
+  theme(legend.position = 'none') 
+
+g
+ggsave(file=paste0(img_dir, '/', '2_ripple_incidence', cond_name, '.pdf'), 
+       width=9.3, height=3, unit='cm', dpi=300, device=cairo_pdf)
+
+```
+

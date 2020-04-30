@@ -24,40 +24,51 @@ img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 ```{r}
 data_dir =  '/mnt/DATA/chat_ripples/y-maze'
 diode.signal = TRUE
-if (diode.signal) {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','welch_psd_table_diode_th6.csv'))
-} else {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','welch_psd_table_th6.csv'))  
-}
-psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 
 trial.info.df = read_csv(paste(data_dir, 'trials.csv', sep='/')) %>%
   dplyr::mutate(file_name=paste0('signal/', animal, '_trial_', trial, '_g0'))
 trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
 
-psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
-                        by=c('date', 'animal', 'file_name'))
-
 freq.bands.df = data.frame(
-  band=c('theta', 'slow gamma', 'fast gamma'),
-  xmin=c(5, 20, 80),
-  xmax=c(9, 45, 150)
+  band=c('theta', 'slow gamma'),
+  xmin=c(5, 25),
+  xmax=c(9, 45)
 )
 ```
 
-# Effect of the task stage
+Load z-scored Morlet PSD estimate data for the task stage effects
 ```{r}
+if (diode.signal) {
+  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'morlet_psd_table_diode_th6.csv', sep='/'))
+} else {
+  psddf.ymaze = read_csv(paste(data_dir,'trial_results', 'morlet_psd_table_th6.csv', sep='/'))  
+}
+psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
+psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+                        by=c('date', 'animal', 'file_name'))
 band.zscore = melt.freq.bands(filter(psddf.ymaze, correct==1), 
                              extra.id.vars=c('learning_day', 'dirname'),
-                             psd.vars.prefix='all_psd_z_' ) %>%
+                             psd.vars.prefix='all_psd_z_',
+                             freq.bands = c(exp(seq(0.1, 5.6, by=0.07)))) %>%
   dplyr::rename(band.zscore=band_power)
+```
 
+Load Welch's PSD estimate data
+```{r}
+if (diode.signal) {
+  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_diode_th6.csv', sep='/'))
+} else {
+  psddf.ymaze = read_csv(paste(data_dir,'trial_results', 'welch_psd_table_th6.csv', sep='/'))  
+}
+psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
+psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
+                        by=c('date', 'animal', 'file_name'))
 psd.molten = melt.freq.bands(filter(psddf.ymaze, correct==1), 
                              extra.id.vars=c('learning_day', 'dirname'),
                              psd.vars.prefix='all_psd_xx_')
 ```
 
-
+# Differences in PSD between stages
 ```{r}
 axis.breaks=c(1:9,seq(10,100,10), 200)
 axis.labels=rep('', length(axis.breaks))
@@ -82,17 +93,15 @@ band.zscore %>%
 
 ```{r}
 animal.band.zscore = band.zscore %>%
-  filter(learning_day >= 5)  %>%
+  #filter(learning_day >= 5)  %>%
   group_by(animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.zscore = mean(band.zscore),
                    sem.zscore = sem(band.zscore))
 
-animal.band.zscore %>%
+g.stage.band.zscore = animal.band.zscore %>%
   filter(laserOn == 0) %>%
   filter(animal == 'BS') %>%
   filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
-  #filter(stage_desc %in% c('MazeStem', 'AfterConsumedReward_10_sec')) %>%
-  #dplyr::mutate(animal_stage = paste0(animal, stage_desc, sep='_')) %>% 
   ggplot(aes(x=band_start_freq, y=mean.zscore, group=stage_desc)) +
   geom_line(aes(color=stage_desc), size=1*px2pt) +
   geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
@@ -100,31 +109,20 @@ animal.band.zscore %>%
   gtheme +
   coord_flip() +
   facet_grid(laserOn ~ channelLocation) +
-  xlim(2,15)+
-  ylim(-1, 1.1) +
-  #xlim(20, 250) +
+  ylim(-1, 1.75) +
   #ylim(-1, 1.8) +
   xlab('Frequency (Hz)') +
   ylab('Power z-score') 
 
+g.stage.band.zscore.lowfreq = g.stage.band.zscore + xlim(2,15)
+g.stage.band.zscore.highfreq = g.stage.band.zscore + xlim(14, 250)
+plot_grid(g.stage.band.zscore.highfreq, g.stage.band.zscore.lowfreq, ncol=1, rel_heights = c(3,2))
 ggsave(paste0(img_dir, '/psd_zscore_giht.pdf'), units = 'cm',
        dpi=300, device=cairo_pdf,
        height=4, width=10)
 ```
 
-```{r}
-animal.band.zscore %>%
-  dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
-  filter(stage_desc %in% c('GoalZone20sec')) %>%
-  ggplot(aes(x=band_start_freq, y=mean.zscore, group=animal_laser)) +
-  geom_line(aes(color=laserOn), size=1*px2pt) +
-  #geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
-  facet_grid(. ~ channelLocation) +
-  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
-  geom_hline(yintercept = 0.0, linetype='dashed') +
-  gtheme
-```
-Effect of the stage on PSD
+# Effect of the stage on PSD
 ```{r}
 animal.psd = psd.molten %>%
   group_by(animal, learning_day, channelLocation, laserOn, stage_desc, band_start_freq) %>%
@@ -147,7 +145,8 @@ animal.psd %>%
   xlab('Frequency (Hz)') +
   ylab('Power z-score') 
 ```
-# Laser effect 
+
+# Laser effect on PSD at Goal
 ```{r}
 animals.psd = psd.molten %>%
   #filter(learning_day >= 5)  %>%
@@ -207,7 +206,6 @@ all.psd = psd.molten %>%
 
 all.psd %>%
   filter(stage_desc %in% c('GoalZone20sec')) %>%
-  #filter(stage_desc %in% c('DuringStim')) %>%
   ggplot(aes(x=band_start_freq, y=mean.power, group=laserOn)) +
   geom_line(aes(color=laserOn), size=1*px2pt) +
   geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power, fill=laserOn), alpha=0.15) +
@@ -224,38 +222,6 @@ ggsave(paste0(img_dir, '/psd_diff.pdf'), units = 'cm',
        height=5, width=10)
 ```
 
-Plots for log(power) difference stats
-```{r}
-library(rlang)
-compared.ymaze.psd = filter(psddf.ymaze, correct == 1, learning_day >= 5, stage_desc == 'GoalZone20sec')
-
-calc.animal.band.summary = function(df, var) {
-  var = enquo(var)
-  varname = quo_name(var)
-  df %>%
-    dplyr::group_by(animal, channelLocation, laserOn) %>%
-    dplyr::summarise(var.mean = mean(!!var),
-                     var.sem = sem(!!var),
-                     var = varname)
-}
-
-calc.log.diff = function(df) {
-  df %>%
-    dplyr::arrange(animal, channelLocation, var, laserOn) %>%
-    dplyr::group_by(animal, channelLocation, var) %>%
-    dplyr::summarise(diff.log.pow = diff(log(var.mean)) )
-}
-
-band.pow.summary = bind_rows(
-    calc.animal.band.summary(compared.ymaze.psd, pow_ripple_band),
-    calc.animal.band.summary(compared.ymaze.psd, pow_fast_gamma),
-    calc.animal.band.summary(compared.ymaze.psd, pow_theta)
-  ) 
-band.pow.summary$var = as.factor(band.pow.summary$var)
-bandnames = levels(band.pow.summary$var)
-
-mean.band.pow.diff = calc.log.diff(band.pow.summary)
-```
 
 # PSD fit
 Fit background with FOOOF and check quality
@@ -342,7 +308,7 @@ ggsave(file=paste0(img_dir, '/', '5_psd_stats.pdf'),
 
 # Coherence
 ```{r}
-wcoh.df = read_csv(paste(data_dir, 'ripple_coherence_table_diode.csv', sep='/'))
+wcoh.df = read_csv(paste(data_dir, 'trial_results', 'ripple_coherence_table_diode.csv', sep='/'))
 wcoh.df$animal = as.factor(wcoh.df$animal)
 wcoh.df$laserOn = as.factor(wcoh.df$laserOn)
 wcoh.df = wcoh.df %>%
@@ -416,11 +382,3 @@ wcoh.summary %>%
                 width=0.2, position='dodge2')
 ```
 
-
-TODO:
-[] check coherence in ripple band during the epochs with ripples in CA3. 
-  - need to check using the ripples generated from the right electodes.
-[x] coherence of the diode signal
-[x] curiosity: what is the theta phase between CA3 and CA1
-  - constant for the same animal but varies between animals from 0 to 180 degrees
-[x] Plot coherence in bands up to 250 Hz.

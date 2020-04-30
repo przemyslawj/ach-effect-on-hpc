@@ -20,7 +20,7 @@ nexp = size(expstable, 1);
 result_table = table();
 
 % Predefined frequencies
-all_bands = exp(0.1:0.07:5.6);
+all_bands = exp(0.1:0.035:5.6);
 min_section_dur_sec = 0.5;
 
 %% process single experiments

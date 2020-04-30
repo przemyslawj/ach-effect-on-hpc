@@ -1,13 +1,13 @@
 path = '/mnt/DATA/chat_ripples/baseline/2019-09-04/signal';
 %path = '/mnt/DATA/Prez/N&A_rest/2018-03-01/signal';
-%path = '/mnt/DATA/chat_ripples/y-maze/2019-11-12/signal';
+%path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
 selected_channels_only = 1;
 use_diode = 1;
 
-secondOffset = 270;
+secondOffset = 3;
 meta = ReadMeta(binName, path);
 lengthSeconds = min(180, str2double(meta.fileTimeSecs) - secondOffset);
 %lengthSeconds = str2double(meta.fileTimeSecs) - secondOffset;
@@ -15,7 +15,7 @@ lengthSeconds = min(180, str2double(meta.fileTimeSecs) - secondOffset);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv',...
     animal_code, meta, selected_channels_only, use_diode);
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);
@@ -36,6 +36,7 @@ keep_sample_fewer = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 1);
 for chan = 1:size(dataArray, 1)  
     ripple_detection_signal = GetRippleSignal(filtered(chan, :)', fs);
     std_estimate = std(ripple_detection_signal(keep_sample_fewer));
+    fprintf('filtered std %.8f\n', std(filtered(chan, keep_sample_fewer)));
     [ripples,sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(chan,:)', ...
                                  'frequency', fs, ...
                                  'thresholds', [2 6 0.01],...

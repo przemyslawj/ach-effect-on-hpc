@@ -10,10 +10,10 @@ diode.signal = TRUE
 
 ```{r include=FALSE}
 if (diode.signal) {
-  ripple.df = read_csv(paste0(data_dir,'/','theta_ripples_diode_th6.csv'))
+  ripple.df = read_csv(paste(data_dir, 'trial_results', 'ripples_diode_th6.csv', sep='/'))
   
 } else {
-  ripple.df = read_csv(paste0(data_dir,'/','ripples_th6.csv'))
+  ripple.df = read_csv(paste(data_dir, 'trial_results', 'ripples_th6.csv', sep='/'))
 }
 
 ripple.df = ripple.df %>%

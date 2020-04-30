@@ -1,5 +1,4 @@
-path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
-%path = '/mnt/DATA/Clara/diode_baseline/20190906/BD031ActiveStimON1_g0';
+%path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
 path = '/mnt/DATA/chat_ripples/baseline/2019-09-04/signal';
 %path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
 
@@ -14,7 +13,7 @@ meta = ReadMeta(binName, path);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_theta.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv',...
     animal_code, meta);
 
 lengthSeconds = min(120, str2double(meta.fileTimeSecs) - secondOffset);

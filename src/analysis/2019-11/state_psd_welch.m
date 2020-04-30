@@ -8,8 +8,8 @@ ripple_std_thr = 6;
 use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
-is_after_ymaze = 1;
-is_baseline = 0;
+is_after_ymaze = 0;
+is_baseline = 1;
 is_ymaze_trial = 0;
 
 secondOffset = 0;
@@ -23,16 +23,16 @@ end
 if is_urethane
     datarootdir = '/mnt/DATA/chat_ripples/urethane';
 end
-        
+
 trials_fpath = [datarootdir filesep 'trials.csv'];
 if is_after_ymaze
     trials_fpath = [datarootdir filesep 'trials_after.csv'];
 end
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ripples.csv';
+reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
 if is_baseline
-    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_theta.csv';
+    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
 end
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
@@ -50,7 +50,7 @@ entry_i = 1;
 for i = 1:nexp
     animal_code = expstable.animal{i};
     state = expstable.state{i};
-        
+
     dateddir = datestr(expstable.date(i), 'yyyy-mm-dd');
     signalpath = [ datarootdir filesep dateddir filesep strtrim(expstable.dirname{i})];
     binfile = dir([ signalpath filesep animal_code '*.bin']);
@@ -67,7 +67,7 @@ for i = 1:nexp
     end
     channelTable = readChannelTable(...
         channels_file, animal_code, meta, selected_channels_only, use_diode);
-    
+
     dataArray = ReadSGLXData(meta, secondOffset, str2double(meta.fileTimeSecs) - secondOffset);
     dataArray = dataArray(channelTable.rec_order,:);
 
@@ -77,14 +77,14 @@ for i = 1:nexp
     if use_diode
         [dataArray, channelTable] = subtractDiodeSignal(dataArray, channelTable);
     end
-    
+
     nchans = size(dataArray, 1);
 
     %dataArray = filter50Hz(dataArray, fs);
 
     laserChannelIdx = find(strcmp(channelTable.location, 'Laser'));
     emgIdx = find(strcmp(channelTable.location, 'EMG'));
-    if is_ymaze_trial == 1       
+    if is_ymaze_trial == 1
         tracking_filepath = [ datarootdir filesep get_trackingfilepath(dateddir, binfile.name)];
         time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
         if ~isempty(time_mouse_arrived)
@@ -92,7 +92,7 @@ for i = 1:nexp
                                                    time_mouse_arrived,...
                                                    fs);
             trialPeriods.laserOn = repmat(expstable.laserOn(i), size(trialPeriods,1), 1);
-        else 
+        else
             trialPeriods = [];
         end
     else
@@ -105,9 +105,9 @@ for i = 1:nexp
                    laserChannelIdx, fs, 5.15);
             end
         end
-            
+
     end
-    
+
     if is_after_ymaze
         trialPeriods = table();
         trialPeriods.starts = 0;
@@ -115,12 +115,12 @@ for i = 1:nexp
         trialPeriods.laserOn = expstable.laserOn(i);
         trialPeriods.stage_desc = {'after'};
     end
-    
+
     if isempty(trialPeriods)
         warning('No trial periods found in the recording')
         continue
     end
-    
+
     % Filter LFP for SWR detection
     filtered = applyRippleFilter(dataArray, channelTable, fs);
 
@@ -134,7 +134,7 @@ for i = 1:nexp
     med_gamma = [60 80];
     fast_gamma = [80 130];
     ripple_band = [130 250];
-    
+
     % Urethane specific bounds
     if is_urethane
         slow = [0.1 2];
@@ -163,7 +163,7 @@ for i = 1:nexp
 %             std_estimates.date == expstable.date(i) & ...
 %             strcmp(strrep(std_estimates.channel_name, ' ', ''), ...
 %                    strrep(channelTable.channel_name{channel}, ' ', '')));
-        
+
         % remove epochs with jumps in the signal
         channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.5);
         keep_sample = intersect(channel_keep_sample, keep_sample);
@@ -187,24 +187,14 @@ for i = 1:nexp
             end
             ripples = ripples(keep_ripples,:);
         end
-        
 
-%         band_power = zeros(numel(all_bands), size(signal_pxx, 2));
-%         for j=1:(numel(all_bands)-1)
-%             if all_bands(j) >= freqs(1)
-%                 % Assign power of the first higher frequency
-%                 k = find(freqs >= all_bands(j), 1, 'first');
-%                 band_power(j,:) = signal_pxx(k, :);
-%             end
-%         end
-%         band_power_zscored = zscore(band_power);
-        
+
         for trial_period_i = 1:size(trialPeriods, 1)
             period_start = max(1, int32(trialPeriods.starts(trial_period_i)));
             period_end = min( size(dataArray, 2), ...
                               int32(trialPeriods.ends(trial_period_i)));
             period_signal = dataArray(channel, period_start : period_end);
-                
+
             sec_start = max(0, double(period_start) / fs);
             sec_end = double(period_end) / fs;
             %sec_end = min(sec_end,  size(dataArray, 2) / fs);
@@ -228,70 +218,63 @@ for i = 1:nexp
             result_table.stage_desc(entry_i) = trialPeriods.stage_desc(trial_period_i);
             result_table.state(entry_i) = {state};
             result_table.laserOn(entry_i) = trialPeriods.laserOn(trial_period_i);
-            
+
 
             slow_adjusted = [ max(slow(1), freqs(1)) slow(2) ];
             result_table.dom_freq(entry_i) = PeakFreq(freqs, period_pxx, [slow_adjusted(1), 45]);
 
-            %result_table.pow_slow(entry_i) = MeanBandPower(freqs, period_pxx, slow_adjusted);
             result_table.pow_slow(entry_i) = CalcBandPower(fs, period_signal, slow_adjusted);
-            %result_table.pow_theta(entry_i) = MeanBandPower(freqs, period_pxx, theta);
             result_table.pow_theta(entry_i) = CalcBandPower(fs, period_signal, theta);
             result_table.peak_theta(entry_i) = PeakFreq(freqs, period_pxx, theta);
-            %result_table.pow_slow_gamma(entry_i) = MeanBandPower(freqs, period_pxx, slow_gamma);
             result_table.pow_slow_gamma(entry_i) = CalcBandPower(fs, period_signal, slow_gamma);
             result_table.peak_slow_gamma(entry_i) = PeakFreq(freqs, period_pxx, slow_gamma);
-            %result_table.pow_med_gamma(entry_i) = MeanBandPower(freqs, period_pxx, med_gamma);
             result_table.pow_med_gamma(entry_i) = CalcBandPower(fs, period_signal, med_gamma);
-            %result_table.pow_fast_gamma(entry_i) = MeanBandPower(freqs, period_pxx, fast_gamma);
             result_table.pow_fast_gamma(entry_i) = CalcBandPower(fs, period_signal, fast_gamma);
-            %result_table.pow_above_theta(entry_i) = MeanBandPower(freqs, period_pxx, above_theta);
             result_table.pow_above_theta(entry_i) = CalcBandPower(fs, period_signal, above_theta);
-            %result_table.pow_ripple_band(entry_i) = MeanBandPower(freqs, period_pxx, ripple_band);
             result_table.pow_ripple_band(entry_i) = CalcBandPower(fs, period_signal, ripple_band);
             for j=1:(numel(all_bands)-1)
                 result_table.all_psd_xx(entry_i, j) = period_pxx(j);
             end
 
-             section_ripples = [];
-             if ~isempty(ripples)
-                section_ripples = ripples(ripples(:,2) >= sec_start & ripples(:,2) <= sec_end,:);
-             end
-             nripples = size(section_ripples, 1);
-             if ~isempty(section_ripples)
-                result_table.has_ripples(entry_i) = 1;
-                result_table.nripples(entry_i) = size(section_ripples,1);
-                result_table.swr_incidence(entry_i) = size(section_ripples,1) / sec_length;
-                result_table.ripple_peakpow(entry_i) = mean(section_ripples(:,4));
-                result_table.ripple_dur(entry_i) = mean(section_ripples(:,3) - section_ripples(:,1));
-                result_table.ripple_freq(entry_i) = mean(section_ripples(:,5));
-               
-                % Align ripple timings to the start of the trial
-                section_ripples(:, 1:3) = section_ripples(:, 1:3) - sec_start;
-                ripples_table = array2table(section_ripples);
-                ripples_table.Properties.VariableNames = {'start_sec', 'peak_t', 'end_time', 'peakpow', 'peak_freq'};
-                ripples_table.abs_peak_t = ripples_table.peak_t + sec_start;
-                ripples_table.date = repmat(dateddir, nripples, 1);
-                ripples_table.animal = repmat(animal_code, nripples, 1);
-                ripples_table.file_name = repmat(expstable.dirname(i), nripples, 1);
-                ripples_table.trial = repmat({trial}, nripples, 1);
-                ripples_table.stage_desc = repmat({trialPeriods.stage_desc{trial_period_i}}, nripples, 1);
-                ripples_table.stage_dur_sec = repmat(sec_length, nripples, 1);
-                ripples_table.channel = repmat(channelTable.channel(channel), nripples, 1);
-                ripples_table.channelLocation = repmat(channelTable.location(channel), nripples, 1);
-                ripples_table.channelName = repmat(channelTable.channel_name(channel), nripples, 1);
-                ripples_table.laserOn = repmat(result_table.laserOn(entry_i), nripples, 1);
-                ripples_table.state = repmat({state}, nripples, 1);
- 
-                all_ripples = [all_ripples; ripples_table];
-             end
-             if ~isempty(ripples)
-                result_table.swr_powerhz(entry_i) = mean(abs(normalizedSquaredSignal));
-             end
-            
-             entry_i = entry_i + 1;
+            section_ripples = [];
+            if ~isempty(ripples)
+               section_ripples = ripples(ripples(:,2) >= sec_start & ripples(:,2) <= sec_end,:);
+            end
+            nripples = size(section_ripples, 1);
+            if ~isempty(section_ripples)
+               result_table.has_ripples(entry_i) = 1;
+               result_table.nripples(entry_i) = size(section_ripples,1);
+               result_table.swr_incidence(entry_i) = size(section_ripples,1) / sec_length;
+               result_table.ripple_peakpow(entry_i) = mean(section_ripples(:,4));
+               result_table.ripple_dur(entry_i) = mean(section_ripples(:,3) - section_ripples(:,1));
+               result_table.ripple_freq(entry_i) = mean(section_ripples(:,5));
+
+               % Align ripple timings to the start of the trial
+               section_ripples(:, 1:3) = section_ripples(:, 1:3) - sec_start;
+               ripples_table = array2table(section_ripples);
+               ripples_table.Properties.VariableNames = {'start_sec', 'peak_t', 'end_time', 'peakpow', 'peak_freq'};
+               ripples_table.abs_peak_t = ripples_table.peak_t + sec_start;
+               ripples_table.date = repmat(dateddir, nripples, 1);
+               ripples_table.animal = repmat(animal_code, nripples, 1);
+               ripples_table.file_name = repmat(expstable.dirname(i), nripples, 1);
+               ripples_table.trial = repmat({trial}, nripples, 1);
+               ripples_table.stage_desc = repmat({trialPeriods.stage_desc{trial_period_i}}, nripples, 1);
+               ripples_table.stage_dur_sec = repmat(sec_length, nripples, 1);
+               ripples_table.channel = repmat(channelTable.channel(channel), nripples, 1);
+               ripples_table.channelLocation = repmat(channelTable.location(channel), nripples, 1);
+               ripples_table.channelName = repmat(channelTable.channel_name(channel), nripples, 1);
+               ripples_table.laserOn = repmat(result_table.laserOn(entry_i), nripples, 1);
+               ripples_table.state = repmat({state}, nripples, 1);
+
+               all_ripples = [all_ripples; ripples_table];
+            end
+            if ~isempty(ripples)
+               result_table.swr_powerhz(entry_i) = mean(abs(normalizedSquaredSignal));
+            end
+
+            entry_i = entry_i + 1;
         end
-       
+
     end
 end
 
@@ -308,10 +291,11 @@ if ~selected_channels_only
 end
 
 %filename_infix = [filename_infix '_single_std'];
+outdir = [datarootdir filesep 'trial_results'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
-writetable(result_table, [datarootdir filesep 'welch_psd_table' outfile_suffix]);
-writetable(all_ripples, [datarootdir filesep 'ripples' outfile_suffix]);
-            
+writetable(result_table, [outdir filesep 'welch_psd_table' outfile_suffix]);
+writetable(all_ripples, [outdir filesep 'ripples' outfile_suffix]);
+
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));
     pow = bandpower(pxx,f1,band,'psd');

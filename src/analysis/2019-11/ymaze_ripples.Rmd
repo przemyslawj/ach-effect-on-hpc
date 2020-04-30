@@ -17,11 +17,11 @@ data_dir = '/mnt/DATA/chat_ripples/y-maze/'
 img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 
 if (diode.signal) {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','welch_psd_table_diode_th6.csv'))
-  ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_diode_th6.csv'))
+  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_diode_th6.csv', sep='/'))
+  ripples.ymaze = read_csv(paste(data_dir, 'trial_results', 'ripples_diode_th6.csv', sep='/'))
 } else {
-  psddf.ymaze = read_csv(paste0(data_dir,'/','psd_table_th6.csv'))
-  ripples.ymaze = read_csv(paste0(data_dir,'/','ripples_th6.csv'))
+  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_th6.csv', sep='/'))
+  ripples.ymaze = read_csv(paste(data_dir, 'trial_results', 'ripples_th6.csv', sep='/'))
 }
 
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
