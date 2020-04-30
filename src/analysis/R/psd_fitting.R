@@ -26,17 +26,12 @@ calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), s
     band.row = fooof.analysis$get_band_peak(fm$peak_params_, 
                                              band_def=c(freq.bands.df$xmin[band_i], freq.bands.df$xmax[band_i]), 
                                              ret_one = TRUE)
-    #band.indecies = which(fm$freqs >= freq.bands.df$xmin[band_i] & fm$freqs <= freq.bands.df$xmax[band_i])
-    #peak.freq = fm$freqs[band.indecies][which.max(fm$power_spectrum[band.indecies])]
-    #band.rows = fooof.analysis$get_band_peak(fm$peak_params_, 
-    #                                        band_def=c(freq.bands.df$xmin[band_i], freq.bands.df$xmax[band_i]), 
-    #                                        ret_one = FALSE)
-    #band.rows = matrix(band.rows, ncol=3)
+
     peak.freq = band.row[1]
     band_name = stringr::str_replace(freq.bands.df$band[band_i], ' ', '_')
-    res[[paste('peak', band_name, sep='_')]] = peak.freq #weighted.mean(band.rows[,1], band.rows[,2])
+    res[[paste('peak', band_name, sep='_')]] = peak.freq 
     res[[paste('pow', band_name, sep='_')]] = band.row[2]
-    res[[paste('width', band_name, sep='_')]] = band.row[3] #max(band.rows[,3])
+    res[[paste('width', band_name, sep='_')]] = band.row[3]
   }
   res$background_offset = fm$background_params_[1]
   if (length(fm$background_params_) == 3) {
@@ -127,3 +122,31 @@ gen.mean.psd = function(param.group) {
   return(yvals)
 }
 
+
+fm2df = function(fm, channelLocation, laserOn) {
+  df = bind_rows(
+    data.frame(band_start_freq = fm$freqs,
+               band_power = fm[['_bg_fit']],
+               sem.power = 0,
+               name = 'bg')
+  )
+  df$channelLocation = channelLocation
+  df$laserOn = laserOn
+  df
+}
+
+calc.animal.band.fit.df = function(animal.psd, freq.range = c(1, 120)) {
+  bs.ca1.psd = filter(animal.psd, channelLocation == 'CA1') %>%
+    dplyr::mutate(band_power = exp(band_power) ** log(10))
+  bs.ca1.fit.1 = fm2df(calc.bands.pow(subset(bs.ca1.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA1', 1)
+  bs.ca1.fit.0 = fm2df(calc.bands.pow(subset(bs.ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA1', 0)
+  
+  bs.ca3.psd = filter(animal.psd, channelLocation == 'CA3') %>%
+    dplyr::mutate(band_power = exp(band_power) ** log(10))
+  bs.ca3.fit.1 = fm2df(calc.bands.pow(subset(bs.ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA3', 1)
+  bs.ca3.fit.0 = fm2df(calc.bands.pow(subset(bs.ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA3', 0)
+  
+  bs.fit = bind_rows(bs.ca1.fit.0, bs.ca1.fit.1, bs.ca3.fit.0, bs.ca3.fit.1)
+  bs.fit$laserOn = as.factor(bs.fit$laserOn)
+  bs.fit
+}

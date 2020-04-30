@@ -1,16 +1,31 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
-```{r}
-library(purrr)
+```{r include=FALSE}
+knitr::opts_chunk$set(include=TRUE, collapse=TRUE, warning=FALSE, echo=FALSE)
+```
 
-laser.col='#0098ffff'
-nolaser.col='grey30'
+```{r include=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(cowplot)
+library(ggpubr)
+library(purrr)
+select = dplyr::select
+
+source('laser_stats.R')
+source('plotting_params.R')
+source('psd_analysis.R')
+source('psd_fitting.R')
 ```
 
 
-```{r read_data}
+```{r read_data,  include=FALSE}
 diode.signal = TRUE
 
 data_dir = '/mnt/DATA/chat_ripples/y-maze/'
@@ -26,8 +41,6 @@ if (diode.signal) {
 
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 ripples.ymaze = prepare.ymaze.df(ripples.ymaze)
-
-
 ```
 
 
@@ -36,11 +49,10 @@ Join trial metadata (includes if the mouse made correct choice)
 trial.info.df = read_csv(paste(data_dir, 'trials.csv', sep='/')) %>%
   dplyr::mutate(file_name=paste0('signal/', animal, '_trial_', trial, '_g0'))
 trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
-glimpse(trial.info.df)
 ```
 
 ```{r}
-library(stringr)
+#library(stringr)
 #trial.info.df = dplyr::mutate(trial.info.df, file_name = stringr::str_replace(file_name, '_trial_', '_after_'))
 psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
                         by=c('date', 'animal', 'file_name'))
@@ -58,11 +70,9 @@ Performance reached 70 %
                    sem(pct.correct))
 ```
 
+Summary of trials per animal and day
 ```{r}
 psddf.ymaze.correct = filter(psddf.ymaze, correct == 1)
-```
-
-```{r}
 psddf.ymaze.correct %>%
   filter(laserOn == 0, learning_day >= 1, stage_desc == 'Total', channelLocation == 'CA1') %>%
   group_by(animal, learning_day) %>%
@@ -130,7 +140,6 @@ psddf.ymaze.correct %>%
 
 ```{r}
 swr.ymaze.summary = psddf.ymaze.correct %>%
-  filter(learning_day != 4)  %>%
   group_by(animal, laserOn, stage_desc, channelLocation) %>% 
   dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
                    swr_incidence.sem=sem(swr_incidence),
@@ -164,25 +173,20 @@ ggsave(paste0(img_dir, '/ripples_change.pdf'), units = 'cm',
        height=5, width=4.5)
 ```
 
+Day mean per animal
 ```{r}
 swr.ymaze.summary %>% 
   filter(stage_desc == 'DuringStim')  %>%
   DT::datatable()
-
-psddf.ymaze.correct %>%
-  filter(stage_desc == 'DuringStim')  %>%
-  dplyr::select(date, animal, trial, laserOn, swr_incidence, nripples) %>%
-  DT::datatable()
 ```
-Significance testing
+
+Count of trials per animal
 ```{r}
 tested.ymaze.correct = filter(psddf.ymaze.correct, 
-                              learning_day != 4, # Exclude the day when laser was turned off.
                               #laserOn == 0,
                               channelLocation == 'CA1',
                               stage_desc == 'DuringStim') %>%
   dplyr::mutate(early.learning=(learning_day < 5))
-# Count of trials per animal
 tested.ymaze.correct %>% group_by(animal, channelLocation, laserOn) %>%
   dplyr::summarise(n=n()) %>%
   group_by(laserOn) %>% 
@@ -190,7 +194,10 @@ tested.ymaze.correct %>% group_by(animal, channelLocation, laserOn) %>%
 
 tested.ymaze.correct %>% group_by(laserOn) %>%
   dplyr::summarise(mean(swr_incidence), sem(swr_incidence))
+```
 
+## Significance testing
+```{r}
 m.full = lmerTest::lmer(swr_incidence ~ laserOn + (1 + laserOn | animal), 
                         data=tested.ymaze.correct, 
                         REML = TRUE) 

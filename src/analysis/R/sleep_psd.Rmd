@@ -1,23 +1,15 @@
 ---
-title: "Effect of cholinergic stimulation on CA1 and CA3"
+title: "Effect of cholinergic stimulation on CA1 and CA3 PSD"
 output:
   html_document:
     df_print: paged
 ---
 
-TODO:
-- divide analysis by channel location
-- do analysis on diode
 ```{r include=FALSE}
-knitr::opts_chunk$set(include=FALSE, collapse=TRUE, warning=FALSE, echo=FALSE)
+knitr::opts_chunk$set(include=TRUE, collapse=TRUE, warning=FALSE, echo=FALSE)
 ```
 
 Effects of the laser activation on the signal recorded in baseline conditions.
-
-The recordings session were divided into the ones where the mouse was immobile (sleep) and mobile (awake).
-
-Only one recording channel per animal is included for the comparisions. The channel was selected based on SNR, presence of theta oscillations when the mouse was mobile, and the number of detected ripples. The strength of the optogenetic activation could be different in each mouse, and also be different depending on the exact recording channel positions, so I showed the laser effects or each mouse separately.
-
 
 ```{r include=FALSE}
 library(readr)
@@ -26,42 +18,18 @@ library(ggplot2)
 library(tidyr)
 library(cowplot)
 library(ggpubr)
-library(lmerTest)
 select = dplyr::select
 
+source('laser_stats.R')
+source('plotting_params.R')
 source('psd_analysis.R')
 source('psd_fitting.R')
 ```
 
-```{r}
-sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
-```
 
 ```{r include=FALSE}
 experiment_name = 'baseline'
 diode.signal = TRUE
-
-img_dir = paste0('/home/prez/tmp/ymaze_chat_x_ai32/img_gen/', experiment_name)
-px2pt = 1/(ggplot2::.pt*72.27/96)
-gtheme = theme_minimal() + theme_cowplot() + 
-  theme(text = element_text(size=8, family = 'Arial'), 
-        panel.background = element_rect(fill = 'white'),
-        line = element_line(size = px2pt),
-        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
-        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
-        axis.text.x=element_text(size=8, colour = "black"),
-        axis.text.y=element_text(size=8, colour = "black"),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8))
-
-col_width = 8.5 
-laser.col='#0098ffff'
-nolaser.col='grey30'
-```
-
-
-
-```{r include=FALSE}
 data_dir = paste0('/mnt/DATA/chat_ripples/', experiment_name)
 
 if (diode.signal) {
@@ -77,12 +45,6 @@ psddf = psddf %>%
   dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
 psddf$trial_id = as.factor(psddf$trial_id)
 
-#freq.bands.df = data.frame(
-#  band=c('theta', 'slow gamma', 'fast gamma'),
-#  xmin=c(5, 20, 80),
-#  xmax=c(11, 40, 150)
-#)
-
 freq.bands.df = data.frame(
   band=c('theta', 'slow gamma'),
   xmin=c(5, 25),
@@ -91,14 +53,17 @@ freq.bands.df = data.frame(
 ```
 
 # Effects on the signal spectrum
-Trials per moues
+Number of trials per animal
 ```{r}
 psddf %>% group_by(animal) %>%
   dplyr::summarise(ntrials=length(unique(trial_id))) %>%
   dplyr::summarise(mean(ntrials), sem(ntrials),)
 ```
 
+## PSD ratio
+Replicates Vandecasteele (2014), but the PSD ratios problematic as reflect changes in background spectrum
 
+Ratios per animal
 ```{r}
 psd.molten = melt.freq.bands(psddf, extra.id.vars = c('state'))
 psd.ratio.df = calc.freq.band.ratio(psd.molten)
@@ -130,10 +95,8 @@ animal.psd.ratio %>%
   theme(legend.position = 'top')
 ```
 
-
-TODO should sample the same number of trials per animal
+Mean ratio
 ```{r}
-
 channel.psd.ratio = psd.ratio.df %>%
   dplyr::group_by(band_name, band_start_freq, channelLocation, state) %>%
   dplyr::summarise(ratio.mean=mean(power.ratio.change, na.rm=TRUE),
@@ -154,46 +117,14 @@ channel.psd.ratio %>%
   gtheme +
   theme(legend.position = 'none')
 ```
-```{r}
+
+# PSD and background spectrum fit
+```{r include = FALSE}
 animals.psd = psd.molten %>%
-  filter(state != 'scopolamine') %>%
   filter(stage_desc %in% c('stim', 'before_stim')) %>%
-  #filter(animal == 'BS') %>%
   group_by(channelLocation, animal, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(sem.power = sem(log(band_power)), 
                    band_power = mean(log(band_power)))
-
-fm2df = function(fm, channelLocation, laserOn) {
-  df = bind_rows(
-    data.frame(band_start_freq = fm$freqs,
-               band_power = fm[['_bg_fit']],
-               sem.power = 0,
-               name = 'bg')
-    #data.frame(band_start_freq = fm$freqs,
-    #           sem.power = fm$power_spectrum,
-    #           name = 'modeled'
-    #)
-  )
-  df$channelLocation = channelLocation
-  df$laserOn = laserOn
-  df
-}
-
-calc.animal.band.fit.df = function(animal.psd, freq.range = c(1, 120)) {
-  bs.ca1.psd = filter(animal.psd, channelLocation == 'CA1') %>%
-    dplyr::mutate(band_power = exp(band_power) ** log(10))
-  bs.ca1.fit.1 = fm2df(calc.bands.pow(subset(bs.ca1.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA1', 1)
-  bs.ca1.fit.0 = fm2df(calc.bands.pow(subset(bs.ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA1', 0)
-  
-  bs.ca3.psd = filter(animal.psd, channelLocation == 'CA3') %>%
-    dplyr::mutate(band_power = exp(band_power) ** log(10))
-  bs.ca3.fit.1 = fm2df(calc.bands.pow(subset(bs.ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA3', 1)
-  bs.ca3.fit.0 = fm2df(calc.bands.pow(subset(bs.ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA3', 0)
-  
-  bs.fit = bind_rows(bs.ca1.fit.0, bs.ca1.fit.1, bs.ca3.fit.0, bs.ca3.fit.1)
-  bs.fit$laserOn = as.factor(bs.fit$laserOn)
-  bs.fit
-}
 
 joined.psd.fit.df = map_dfr(unique(animals.psd$animal), ~ {
   animal.psd = filter(animals.psd, animal == .x)
@@ -204,7 +135,9 @@ joined.psd.fit.df = map_dfr(unique(animals.psd$animal), ~ {
     dplyr::mutate(animal = .x, name = paste(name, 'high_freq', sep='_'))
   bind_rows(animal.psd, animal.fit.low.freq, animal.fit.high.freq)
 })
+```
 
+```{r}
 joined.psd.fit.df %>%
   #filter(animal == 'BS') %>%
   dplyr::mutate(name_laser=paste(name, laserOn, sep='_')) %>%
@@ -237,9 +170,9 @@ ggsave(file=paste0(img_dir, '/', '2_psd_mean_all.pdf'),
 
 
 ```{r}
-bs.fit = filter(joined.psd.fit.df, name != 'bg_high_freq') %>%
-  filter(animal == 'BS')
-bind_rows(animal.psd, bs.fit) %>%
+plotted.lowfreq.fit = filter(joined.psd.fit.df, name != 'bg_high_freq')
+bind_rows(animals.psd, plotted.lowfreq.fit) %>%
+  filter(animal == 'BS') %>%
   dplyr::mutate(name_laser=paste(name, laserOn, sep='_')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, y=band_power, 
@@ -248,15 +181,15 @@ bind_rows(animal.psd, bs.fit) %>%
                   group=name_laser, fill=laserOn,
                   ymin=band_power - sem.power, ymax=band_power + sem.power), 
               alpha=0.2) +
-  scale_x_log10(limits=c(2,19), breaks=axis.breaks, labels=axis.labels) +
-  ylim(-12,-7.1)+
+  scale_x_log10(limits=c(2,20), breaks=axis.breaks, labels=axis.labels) +
+  ylim(-13,-7.1)+
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
   scale_linetype_manual(values=c('dashed', 'solid')) +
   facet_grid(. ~ channelLocation, scales = 'free') +
   gtheme +
   theme(legend.position = 'none') +
-  xlab('Frequency (Hz)') + ylab('Log power (a.u.)')
+  xlab('Frequency (Hz)') + ylab('Log power')
 ggsave(file=paste0(img_dir, '/', '2_psd_fit_inset.pdf'), 
        width=8, height=8, unit='cm', dpi=300, device=cairo_pdf)
 ```
@@ -295,31 +228,6 @@ bind_rows(
 
 ggsave(file=paste0(img_dir, '/', '2_psd_indiv_traces.pdf'), 
        width=12.5, height=6, unit='cm', dpi=300, device=cairo_pdf)
-```
-
-
-```{r}
-plot.model.diagnostics = function(m, animals, laser_states) {
-  df = data.frame(res=unname(residuals(m)), 
-                  fitted=unname(fitted(m)), 
-                  animal=animals, 
-                  laser=laser_states) 
-  
-  ggplot(df) +
-    geom_point(aes(x=res, y=fitted, colour=animal, shape=laser)) +
-    theme(legend.position = 'none') -> g1
-  
-  X=qqnorm(residuals(m), plot.it=FALSE)
-  data.frame(x=X$x, y=X$y, animal=animals, laser=laser_states) %>%
-    ggplot() +
-    geom_point(aes(x=x, y=y, colour=animal, shape=laser)) +
-    stat_qq_line(mapping=aes(sample=res), data=df) +
-    xlab('Theoretical quantiles') +
-    ylab('Sample quantiles') +
-    theme(legend.position = 'top') -> g2
-  
-  plot_grid(g1,g2)
-}
 ```
 
 
@@ -373,71 +281,15 @@ anova(m.full, refit=FALSE, ddf='Satterthwaite')
 # PSD fit
 Fit background with FOOOF and check quality
 ```{r}
-#fit.psd.df = fit.background.df(psd.molten, freq.bands.df, c(15, 120), fit.knee = FALSE)
 fit.psd.df = fit.background.df(psd.molten, freq.bands.df, c(15, 150), fit.knee = FALSE)
 
 summary(fit.psd.df$fit_error)
 ```
 
 
-Check aperiodicity reduced on laser
-```{r}
-fit.psd.df %>%
-  filter(stage_desc %in% c('before_stim', 'stim')) %>%
-  #filter(!is.na(pow_slow_gamma)) %>%
-  ggplot(aes(x=laserOn, y=background_auc)) +
-  geom_jitter(width=0.2) +
-  facet_grid(channelLocation ~ animal) + 
-  gtheme
-
-```
-Show median change per animal
-```{r}
-library(rlang)
-create.animal.summary = function(df, var) {
-  var = enquo(var)
-  group_by(df, animal, laserOn, stage_desc, channelLocation) %>% 
-    dplyr::summarise(var.mean=mean(!!var, na.rm=TRUE),
-                     var.sem=sem(!!var))
-}
-
-plot.laser.change = function(df, var) {
-  var = enquo(var)
-  summary.df = create.animal.summary(filter(df, stage_desc != 'after_stim'), !!var)
-  xlabels = c('off', 'on')
-  summary.df %>%
-    ggplot() +
-    #geom_point(aes(x=laserOn, y=var.mean, color=animal)) +
-    geom_line(aes(x=laserOn, y=var.mean, group=animal)) +
-    geom_ribbon(aes(x=laserOn, 
-                    ymin=var.mean - var.sem, 
-                    ymax=var.mean + var.sem,
-                    group=animal), 
-                  alpha=0.1) +
-    facet_grid(. ~ channelLocation, scales = 'free') +
-    xlab('Stimulation') +
-    scale_x_discrete(labels=xlabels) +
-    gtheme
-}
-```
-
-
 Aperiodicity reduced:
 Background offset reduced, but slope also increased -> PSD starts lower but decreases less with freq,
 ```{r}
-calc.laser.fixed.effects = function(tested.df, var) {
-  var = enquo(var)
-  var.name = quo_name(var)
-  form = reformulate('laserOn + (1 + laserOn | animal)', var.name)
-  m.full = lmerTest::lmer(form, 
-                          data=tested.df,
-                          REML = TRUE) 
-  print(summary(m.full))
-  #print(coef(m.full)$animal)
-  print(anova(m.full, refit=FALSE, ddf='Satterthwaite'))
-  plot.model.diagnostics(m.full, tested.df$animal, tested.df$laserOn)
-}
-
 g.bac.auc = plot.laser.change(fit.psd.df, background_auc) + ylab('Background spectrum AUC')
 g.bac.auc
 calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA1'), background_auc)
@@ -447,7 +299,7 @@ calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA3'), backgroun
 ## Slow Gamma
 Count of trials with slow gamma:
 ```{r}
-var = quo(pow_sm_gamma)
+var = quo(pow_slow_gamma)
 pct.theta.oscillating = group_by(fit.psd.df, channelLocation, animal, laserOn) %>%
   dplyr::summarise(pct.oscillating=sum(!is.na(!!var)) / n())
 pct.theta.oscillating
@@ -458,13 +310,14 @@ t.test(subset(ca.subset, laserOn==0)$pct.oscillating,
 group_by(pct.theta.oscillating, channelLocation, laserOn) %>% dplyr::summarise(mean(pct.oscillating), sem(pct.oscillating))
 ```
 
-Significant increase in slow gamma for CA1
+Significant increase in slow gamma
 ```{r}
 var = quo(pow_slow_gamma)
 fit.sgamma.present = fit.psd.df %>%
   dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
-g.sgamma.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Slow Gamma Power (25 - 45 Hz; a.u.)')
+g.sgamma.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Slow Gamma Power (25 - 45 Hz)')
 g.sgamma.pow
+calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var)
 calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA3'), !!var)
 
 fit.psd.df %>% group_by(channelLocation, laserOn) %>% dplyr::summarise(mean(!!var, na.rm=T), sem(!!var))
@@ -482,6 +335,7 @@ filter(fit.psd.df, !is.na(!!peak_var)) %>%
   dplyr::summarise(mean(peak.mean), sem(peak.mean))
 
 plot.laser.change(fit.psd.df, !!peak_var) + ylab('Central Slow Gamma frequency (Hz)')
+calc.laser.fixed.effects(filter(fit.sgamma.present, channelLocation == 'CA1', !is.na(!!peak_var)), !!peak_var)
 calc.laser.fixed.effects(filter(fit.sgamma.present, channelLocation == 'CA3', !is.na(!!peak_var)), !!peak_var)
 ```
 ## Theta
@@ -510,13 +364,15 @@ Significant increase in pow theta.
 var = quo(pow_theta)
 fit.theta.present = fit.psd.df %>%
   filter(!is.na(!!var))
-  #dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
-g.theta.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Theta Power (5 - 11 Hz; a.u.)')
+
+g.theta.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Theta Power (5 - 11 Hz)')
 g.theta.pow
+calc.laser.fixed.effects(filter(fit.theta.present, channelLocation == 'CA1'), !!var)
 calc.laser.fixed.effects(filter(fit.theta.present, channelLocation == 'CA3'), !!var)
 fit.psd.df %>% group_by(channelLocation, laserOn) %>% dplyr::summarise(mean(!!var, na.rm=T), sem(!!var))
 ```
-Lower theta central frequency when the laser on...
+
+Lower theta central frequency when the laser on
 ```{r}
 peak_var = quo(peak_theta)
 filter(fit.psd.df, !is.na(!!peak_var)) %>%
@@ -529,6 +385,7 @@ filter(fit.psd.df, !is.na(!!peak_var)) %>%
 
 plot.laser.change(fit.psd.df, !!peak_var) + ylab('Central Theta frequency (Hz)')
 calc.laser.fixed.effects( filter(fit.psd.df, !is.na(!!peak_var), channelLocation == 'CA1'), !!peak_var)
+calc.laser.fixed.effects( filter(fit.psd.df, !is.na(!!peak_var), channelLocation == 'CA3'), !!peak_var)
 ```
 
 ```{r}

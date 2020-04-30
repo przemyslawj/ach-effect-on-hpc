@@ -1,14 +1,37 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Effect of cholinergic stimulation on CA1 and CA3 ripples"
+output:
+  html_document:
+    df_print: paged
 ---
 
-```{r}
-data_dir =  '/mnt/DATA/chat_ripples/baseline'
+Notebook should be run after sleep_psd.Rmd 
+
+```{r include=FALSE}
+experiment_name = 'baseline'
 diode.signal = TRUE
+
+img_dir = paste0('/home/prez/tmp/ymaze_chat_x_ai32/img_gen/', experiment_name)
+px2pt = 1/(ggplot2::.pt*72.27/96)
+gtheme = theme_minimal() + theme_cowplot() + 
+  theme(text = element_text(size=8, family = 'Arial'), 
+        panel.background = element_rect(fill = 'white'),
+        line = element_line(size = px2pt),
+        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
+        axis.text.x=element_text(size=8, colour = "black"),
+        axis.text.y=element_text(size=8, colour = "black"),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8))
+
+col_width = 8.5 
+laser.col='#0098ffff'
+nolaser.col='grey30'
 ```
 
 ```{r include=FALSE}
+data_dir =  '/mnt/DATA/chat_ripples/baseline'
+diode.signal = TRUE
 if (diode.signal) {
   ripple.df = read_csv(paste(data_dir, 'trial_results', 'ripples_diode_th6.csv', sep='/'))
   
@@ -64,14 +87,10 @@ filter(ripple.df, !is.na(peak_freq))[,metric_name] %>%
 summary(ripple_freqs)
 sem(ripple_freqs)
 ```
+
 ## Laser effect on SWR - mixed effects model
 CA1
 ```{r}
-#subset.ripple.df = filter(ripple.df, !is.na(peak_freq))
-#m.full = lmerTest::lmer(ripple_dur ~ laserOn * state + (1 + laserOn + state | animal), 
-#                         data=subset.ripple.df, REML = TRUE) 
-#plot.model.diagnostics(m.full, subset.ripple.df$animal, subset.ripple.df$state)
-
 ca1.psddf = filter(psddf, channelLocation == 'CA1', stage_desc != 'after_stim')
 m.full = lmerTest::lmer(swr_incidence ~ laserOn  + (1 + laserOn | animal), data=ca1.psddf, REML = TRUE) 
 plot.model.diagnostics(m.full, ca1.psddf$animal, ca1.psddf$laserOn)
@@ -129,23 +148,6 @@ sem(subset(ca3.psddf, stage_desc == stage.name)$swr_incidence)
 ```
 
 
-Ripple peak freq not different between laser on and off
-
-```{r include=TRUE}
-#The events detected
-ripple.df %>%
-  ggplot() +
-  geom_boxplot(aes(x=animal, y=ripple_dur, col=laserOn))  +
-  facet_grid(state ~ channelLocation) +
-  ylab('Peak Frequency (Hz)') + xlab('Animal')
-
-ripple.df %>%
-  group_by(animal, stage_desc, channelLocation) %>%
-  dplyr::summarise(m.var=mean(ripple_dur)) %>%
-  group_by(stage_desc, channelLocation) %>%
-  dplyr::summarise(mean(m.var), sem(m.var))
-```
-
 ```{r}
 # CA3 peak freq
 ca3.ripple.df = filter(ripple.df, channelLocation == 'CA1', stage_desc != 'after_stim')
@@ -156,9 +158,7 @@ coef(m.full)$animal
 anova(m.full, refit=FALSE, ddf='Satterthwaite')
 ```
 
-Detected ripples are shorter during the laser activation -- shorter tail of long duration ripples can be observed in the histogram.
-TODO: relative percentages rather than counts.
-
+Detected ripples are shorter during the laser activation
 ```{r include=TRUE}
 ripple.df = ripple.df %>%
   mutate(ripple_dur = end_time-start_sec)
@@ -178,12 +178,10 @@ kruskal.test(ripple_dur~laserOn, data=ripple.df)
 ```
 
 
-Histogram of the ripples over time - the laser active at 20-40 sec
+Histogram of the ripples over time - the laser active at 20-40 s
 
-
-TODO: This could be per mouse and shown as distribution of ripples.
 ```{r include=TRUE}
-source('../bin_ripples.R')
+source('bin_ripples.R')
 
 channel.loc='CA1'
 
