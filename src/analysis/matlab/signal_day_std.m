@@ -1,3 +1,5 @@
+%%% Calculated std estimate for each mouse on the filtered signal from the whole day
+
 datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 
 expstable.animal_date_group = strcat(...
