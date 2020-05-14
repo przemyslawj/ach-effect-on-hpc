@@ -16,7 +16,8 @@ end
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_same_side.csv';
+%reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_same_side.csv';
+reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 nexp = size(expstable, 1);
 
@@ -240,13 +241,13 @@ end
 
 %% Plot coherence
 % Each trial counted twice: once per channel
-scaled_band_coherence = zscore(band_coherence ./ (ntrials / 2));
-f = figure('name', 'Wavelet Coherence',...
-           'Position', [400 700 500 300]);
-
-plotSpectrogram(scaled_band_coherence, 1:sum(trial_period_lengths), ...
-    all_bands(2:end), xintercepts, xlabels);
-saveas(f, ['/home/prez/tmp/ymaze_chat_x_ai32/' file_prefix '_coherence_laser' num2str(laserOn) '.svg'])
+% scaled_band_coherence = zscore(band_coherence ./ (ntrials / 2));
+% f = figure('name', 'Wavelet Coherence',...
+%            'Position', [400 700 500 300]);
+% 
+% plotSpectrogram(scaled_band_coherence, 1:sum(trial_period_lengths), ...
+%     all_bands(2:end), xintercepts, xlabels);
+% saveas(f, ['/home/prez/tmp/ymaze_chat_x_ai32/' file_prefix '_coherence_laser' num2str(laserOn) '.svg'])
 
 %% Utilify functions
 function [scaledM] = matScale(M, required_width)

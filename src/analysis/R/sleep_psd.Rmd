@@ -295,6 +295,9 @@ g.bac.auc
 calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA1'), background_auc)
 calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA3'), background_auc)
 ```
+```{r}
+fit.psd.df %>% group_by(channelLocation, laserOn) %>% dplyr::summarise(mean(background_auc, na.rm=T), sem(background_auc))
+```
 
 ## Slow Gamma
 Count of trials with slow gamma:

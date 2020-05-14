@@ -1,18 +1,19 @@
 datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-secondOffset = 3;
+secondOffset = 0;
 is_ymaze_trial = 1;
 
-datarootdir = '/mnt/DATA/chat_ripples/baseline';
 secondOffset = 0;
-is_ymaze_trial = 0;
+is_ymaze_trial = 1;
+datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 
 save_plots = 1;
 selected_channels_only = 1;
-use_diode = 0;
+use_diode = 1;
 
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv';
+reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
 if ~is_ymaze_trial
     reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
+    datarootdir = '/mnt/DATA/chat_ripples/baseline';
 end
 ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
@@ -21,7 +22,7 @@ if use_diode
 else
     ripples_filename = 'ripples_th6.csv';
 end
-ripplestable = readtable([datarootdir filesep ripples_filename]);
+ripplestable = readtable([datarootdir filesep 'trial_results' filesep ripples_filename]);
 %ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
 %ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);
 
@@ -80,6 +81,9 @@ for gi = 1:max(g)
     nripples = min(ripple_slots, size(group_ripplestable,1));
     hAxFiltered = [];
     hAxRaw = [];
+    if isempty(channel_index)
+        continue
+    end
     for i=1:nripples
         channel_filtered = filtered(channel_index,:);
         channel_zscored_filtered = (channel_filtered - mean(channel_filtered)) / ...
@@ -100,12 +104,11 @@ for gi = 1:max(g)
         
         %subplot(2 * ripple_slots, slot_w, slot_h);
         hAxFiltered(i) = subplot(nslots_h * 2, nslots_w, slot_i);
-        plotSWR(time(indecies), channel_zscored_filtered(indecies), fs, ...
+        %channel_zscored_filtered(indecies), fs, ...
+        plotSWR(time(indecies), ...
+            channel_filtered(indecies), fs, ...
             group_ripplestable.start_sec(i) + peak_offset_sec, ...
             group_ripplestable.end_time(i) + peak_offset_sec);
-
-        ylim_val = 8;
-        %ylim([-ylim_val ylim_val]);
 
         hAxRaw(i) = subplot(nslots_h * 2, nslots_w, slot_i + nslots_w);
         %subplot(2 * ripple_slots, slot_w, slot_h + 1);

@@ -124,7 +124,7 @@ g.stage.band.zscore.highfreq = g.stage.band.zscore + xlim(14, 250)
 plot_grid(g.stage.band.zscore.highfreq, g.stage.band.zscore.lowfreq, ncol=1, rel_heights = c(3,2))
 ggsave(paste0(img_dir, '/psd_zscore_giht.pdf'), units = 'cm',
        dpi=300, device=cairo_pdf,
-       height=4, width=10)
+       height=11, width=10)
 ```
 
 # Effect of the stage on PSD
@@ -177,7 +177,7 @@ joined.psd.fit.df = map_dfr(unique(animals.psd$animal), ~ {
 
 ```{r}
 joined.psd.fit.df %>%
-  filter(animal == 'OS') %>%
+  #filter(animal == 'OS') %>%
   dplyr::mutate(name_laser=paste(name, laserOn, sep='_')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, y=band_power, 
@@ -188,21 +188,22 @@ joined.psd.fit.df %>%
               alpha=0.2) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-20, ymax=-5, alpha=0.05, fill='grey10') +
-  facet_grid(animal ~ channelLocation, scales = 'free') +
+  #facet_grid(animal ~ channelLocation, scales = 'free') +
+  facet_wrap(animal ~ channelLocation, scales = 'free', ncol = 4) +
   scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
   gtheme +
   theme(legend.position = 'none') +
-  scale_y_continuous(breaks=c(-15,-10), limits = c(-18, -8.0))+
+  #scale_y_continuous(breaks=c(-15,-10), limits = c(-18, -7.0))+
   scale_linetype_manual(values=c('dashed', 'dashed', 'solid')) +
-  xlab('Frequency (Hz)') + ylab('Log power (a.u.)')
+  xlab('Frequency (Hz)') + ylab('Log power')
 
-ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean.pdf'), 
-       width=10, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
+#ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean.pdf'), 
+#       width=10, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
  
-#ggsave(file=paste0(img_dir, '/', '5_ymaze_animals_psd.pdf'), 
-#       width=15, height=25, unit='cm', dpi=300, device=cairo_pdf)
+ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean_all.pdf'), 
+       width=15, height=9, unit='cm', dpi=300, device=cairo_pdf)
 ```
 Overall PSD
 ```{r}
