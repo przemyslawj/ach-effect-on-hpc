@@ -2,10 +2,6 @@ datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 secondOffset = 0;
 is_ymaze_trial = 1;
 
-secondOffset = 0;
-is_ymaze_trial = 1;
-datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-
 save_plots = 1;
 selected_channels_only = 1;
 use_diode = 1;
@@ -23,7 +19,10 @@ else
     ripples_filename = 'ripples_th6.csv';
 end
 ripplestable = readtable([datarootdir filesep 'trial_results' filesep ripples_filename]);
-%ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
+if is_ymaze_trial
+    ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
+    secondOffset = 3;
+end
 %ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);
 
 ripplestable.dated_file_channel = strcat(...

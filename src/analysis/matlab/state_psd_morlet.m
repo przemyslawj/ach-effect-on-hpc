@@ -1,8 +1,3 @@
-% TODO:
-% - classify as quiet, asleep based on EMG
-% - calculate based on diode subtracted channels and compare
-% - how to choose electrodes?
-
 %% setup results
 ripple_std_thr = 6;
 use_diode = 1;
@@ -59,12 +54,14 @@ for i = 1:nexp
     fprintf('Processing file for date=%s file=%s\n', dateddir, binfile.name);
     meta = ReadMeta(binfile.name, binfile.folder);
     channels_file = reverse_channels_file;
+    reversed_channel_map = 0;
     if ismember('reverse_channel_map', expstable.Properties.VariableNames) &&...
             (expstable.reverse_channel_map(i) == 0)
         channels_file = ord_channels_file;
+        reversed_channel_map = 1;
     end
     channelTable = readChannelTable(...
-        channels_file, animal_code, meta, selected_channels_only, use_diode);
+        channels_file, animal_code, meta, reversed_channel_map, selected_channels_only, use_diode);
 
     dataArray = ReadSGLXData(meta, secondOffset, str2double(meta.fileTimeSecs) - secondOffset);
     dataArray = dataArray(channelTable.rec_order,:);

@@ -18,7 +18,7 @@ plot.laser.change = function(df, var) {
   xlabels = c('off', 'on')
   summary.df %>%
     ggplot() +
-    #geom_point(aes(x=laserOn, y=var.mean, color=animal)) +
+    geom_point(aes(x=laserOn, y=var.mean, color=animal)) +
     geom_line(aes(x=laserOn, y=var.mean, group=animal)) +
     geom_ribbon(aes(x=laserOn, 
                     ymin=var.mean - var.sem, 
@@ -34,7 +34,7 @@ plot.laser.change = function(df, var) {
 calc.laser.fixed.effects = function(tested.df, var) {
   var = enquo(var)
   var.name = quo_name(var)
-  form = reformulate('laserOn + (1 + laserOn | animal)', var.name)
+  form = glue::glue('{varname} ~ laserOn + (1 + laserOn | animal)', varname=var.name)
   m.full = lmerTest::lmer(form, 
                           data=tested.df,
                           REML = TRUE) 

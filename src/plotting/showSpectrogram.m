@@ -8,6 +8,7 @@ fprintf('Processing file: %s\n', binName);
 subplots = 1;
 selected_channels_only = 1;
 use_diode = 1;
+reversed_channel_map = 1;
 
 meta = ReadMeta(binName, path);
 
@@ -22,7 +23,7 @@ lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 18);
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
     '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
-    animal_code, meta, selected_channels_only, use_diode);
+    animal_code, meta, reversed_channel_map, selected_channels_only, use_diode);
 fs = 600;
 time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
 if ~isempty(time_mouse_arrived)

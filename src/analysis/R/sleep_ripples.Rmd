@@ -12,31 +12,16 @@ experiment_name = 'baseline'
 diode.signal = TRUE
 
 img_dir = paste0('/home/prez/tmp/ymaze_chat_x_ai32/img_gen/', experiment_name)
-px2pt = 1/(ggplot2::.pt*72.27/96)
-gtheme = theme_minimal() + theme_cowplot() + 
-  theme(text = element_text(size=8, family = 'Arial'), 
-        panel.background = element_rect(fill = 'white'),
-        line = element_line(size = px2pt),
-        axis.line.x = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
-        axis.line.y = element_line(size = 0.8 * px2pt, linetype = "solid", colour = "black"),
-        axis.text.x=element_text(size=8, colour = "black"),
-        axis.text.y=element_text(size=8, colour = "black"),
-        axis.title.x = element_text(size=8),
-        axis.title.y = element_text(size=8))
-
-col_width = 8.5 
-laser.col='#0098ffff'
-nolaser.col='grey30'
+source('plotting_params.R')
 ```
 
 ```{r include=FALSE}
 data_dir =  '/mnt/DATA/chat_ripples/baseline'
-diode.signal = TRUE
 if (diode.signal) {
-  ripple.df = read_csv(paste(data_dir, 'trial_results', 'ripples_diode_th6.csv', sep='/'))
+  ripple.df = read_csv(paste(data_dir, 'trial_results_gfp', 'ripples_diode_th6.csv', sep='/'))
   
 } else {
-  ripple.df = read_csv(paste(data_dir, 'trial_results', 'ripples_th6.csv', sep='/'))
+  ripple.df = read_csv(paste(data_dir, 'trial_results_gfp', 'ripples_th6.csv', sep='/'))
 }
 
 ripple.df = ripple.df %>%
@@ -124,11 +109,11 @@ paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
 
 Paired comparison of ripple incidence during the same trial shows the effect of laser is less prominent in some of the individual awake mice.
 
-```{r include=TRUE}
-my.paired.plot(paired.psddf.all, 'swr_incidence') +
-  facet_grid(state ~ .) +
-  ylab('Ripple incidence (Hz)')
-```
+# ```{r include=TRUE}
+# my.paired.plot(paired.psddf.all, 'swr_incidence') +
+#   facet_grid(state ~ .) +
+#   ylab('Ripple incidence (Hz)')
+# ```
 SWR incidence summary
 ```{r}
 stage.name = 'stim'
@@ -225,7 +210,7 @@ swr.baseline.summary %>%
   #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
   #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
   ggplot() +
-  #geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
+  geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
   geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
   geom_ribbon(aes(x=laserOn, 
                   ymin=swr_incidence.mean - swr_incidence.sem, 
@@ -241,6 +226,25 @@ ggsave(file=paste0(img_dir, '/', '2_sleep_ripples_stats.pdf'),
        width=5, height=5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
+```{r}
+psddf %>%
+  ggplot(aes(x=laserOn, y=swr_incidence)) +
+  geom_boxplot() +
+  facet_grid(animal ~ channelLocation) + 
+    xlab('Stimulation') + ylab('Ripple incidence (Hz)') +
+  scale_x_discrete(labels=xlabels) +
+  gtheme
+  
+```
+BD ripples over time
+```{r}
+psddf %>%
+  filter(animal == 'BD') %>%
+  ggplot() +
+  geom_boxplot(aes(x=trial_id, y=swr_incidence, color=laserOn)) +
+  facet_grid(channelLocation ~ .) +
+  gtheme
+```
 
 
 

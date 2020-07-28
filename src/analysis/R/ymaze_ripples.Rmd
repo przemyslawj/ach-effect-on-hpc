@@ -70,6 +70,32 @@ Performance reached 70 %
                    sem(pct.correct))
 ```
 
+Duration of navigation vs goal zone at different of learning
+```{r}
+stage.dur.df = psddf.ymaze %>% 
+  group_by(date, learning_day, animal, trial_id, trial_no, correct, laserOn, stage_desc) %>%
+  dplyr::summarise(dur_sec = mean(stage_dur_sec)) %>%
+  filter(correct == 1) %>%
+  filter(dur_sec > 0) %>% # ignore trials with failed tracking
+  filter(stage_desc %in% c('BeforeGoalZone', 'DuringStim'))
+
+wilcox.test(dur_sec ~ stage_desc, stage.dur.df, subset=learning_day <= 2)
+
+stage.dur.df %>%
+  filter(learning_day <= 2) %>%
+  ggplot(aes(x=stage_desc, y=dur_sec)) +
+  geom_boxplot() +
+  gtheme +
+  xlab('') + ylab('Duration (s)') +
+  scale_x_discrete(labels=c('Stimulation during navigation', 'Stimulation at goal'))
+
+stage.dur.df %>%
+  group_by(date, learning_day, correct, stage_desc) %>% 
+  dplyr::summarise(mean(dur_sec), sem(dur_sec), min(dur_sec), max(dur_sec), n=n()) 
+```
+
+
+
 Summary of trials per animal and day
 ```{r}
 psddf.ymaze.correct = filter(psddf.ymaze, correct == 1)

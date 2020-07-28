@@ -9,13 +9,17 @@ fooof = reticulate::import('fooof')
 fooof.analysis = reticulate::import('fooof.analysis')
 fooof.synth = reticulate::import('fooof.synth')
 
-calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), show.fit=FALSE, fit.knee=TRUE) {
+calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), 
+                          show.fit=FALSE, fit.knee=TRUE,
+                          peak.width.limits = c(1, 30)) {
   background.mode = 'fixed'
   if (fit.knee) {
     background.mode = 'knee'
   }
-  fm = fooof$FOOOF(background_mode = background.mode, max_n_peaks = 8, verbose = TRUE,
-                   peak_width_limits = c(1, 30))
+  fm = fooof$FOOOF(background_mode = background.mode, 
+                   max_n_peaks = 8, 
+                   verbose = TRUE,
+                   peak.width.limits)
   spectra.mat = np_array(c(sample.psd.df$band_power))
   freqs = np_array(sample.psd.df$band_start_freq)
   fm$fit(freqs = freqs, 
@@ -80,22 +84,27 @@ fit.background.df = function(psd.molten,
     dplyr::distinct()
   
   fit.psd.df = map_dfr(1:nrow(psd.entries), ~ {
+    #print(c('Row', .x))
     entry.df = psd.molten %>%
       filter(.data$trial_id == psd.entries$trial_id[.x] &
              .data$stage_desc == psd.entries$stage_desc[.x] & 
              .data$laserOn == psd.entries$laserOn[.x] & 
              .data$channelLocation == psd.entries$channelLocation[.x])
-    #lowbands.pow.list = calc.bands.pow(entry.df, filter(freq.bands.df, band == 'theta'), 
-    #                                   freq.range = c(1, 35), show.fit = F)
-    #names(lowbands.pow.list) = paste('low', names(lowbands.pow.list),sep='_')
-    highbands.pow.list = calc.bands.pow(entry.df, 
-                                        freq.bands.df, #filter(freq.bands.df, band != 'theta'), 
-                                        freq.range = freq.range, 
-                                        show.fit = show.fit,
-                                        fit.knee = fit.knee)
-    highbands.pow.list$fm = NA
-    return(cbind(psd.entries[.x,], #lowbands.pow.list, 
-                 highbands.pow.list))
+
+    tryCatch( {
+      pow.list = calc.bands.pow(entry.df, 
+                                freq.bands.df, #filter(freq.bands.df, band != 'theta'), 
+                                freq.range = freq.range, 
+                                show.fit = show.fit,
+                                fit.knee = fit.knee)
+      pow.list$fm = NA
+      return(cbind(psd.entries[.x,], #lowbands.pow.list, 
+                   pow.list)) },
+      error=function(e) {
+        warning(e) 
+        return(c()) 
+      }
+    )
   })
   fit.psd.df
 }

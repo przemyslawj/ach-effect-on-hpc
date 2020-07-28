@@ -1,11 +1,6 @@
-% TODO:
-% - classify as quiet, asleep based on EMG
-% - calculate based on diode subtracted channels and compare
-% - how to choose electrodes?
-
 %% setup results
 ripple_std_thr = 6;
-use_diode = 1;
+use_diode = 0;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
@@ -13,8 +8,12 @@ is_baseline = 1;
 is_ymaze_trial = 0;
 
 secondOffset = 0;
+
+channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
+channels_file_gfp = '/mnt/DATA/chat_ripples/channel_desc/channels_gfp.csv';    
 if is_ymaze_trial
     datarootdir = '/mnt/DATA/chat_ripples/y-maze';
+    channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
     secondOffset = 3;
 end
 if is_baseline
@@ -30,11 +29,7 @@ if is_after_ymaze
 end
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
-if is_baseline
-    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
-end
-ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
+expstable = expstable(strcmp(expstable.exp, 'main-effect' ) == 0, :);
 
 nexp = size(expstable, 1);
 result_table = table();
@@ -50,23 +45,29 @@ entry_i = 1;
 for i = 1:nexp
     animal_code = expstable.animal{i};
     state = expstable.state{i};
+    exp_name = expstable.exp{i};
 
     dateddir = datestr(expstable.date(i), 'yyyy-mm-dd');
     signalpath = [ datarootdir filesep dateddir filesep strtrim(expstable.dirname{i})];
-    binfile = dir([ signalpath filesep animal_code '*.bin']);
+    binfile = dir([ signalpath filesep '*.bin']);
     if size(binfile, 1) == 0
         warning('No data files found at %s', signalpath);
         continue
     end
     fprintf('Processing file for date=%s file=%s\n', dateddir, binfile.name);
     meta = ReadMeta(binfile.name, binfile.folder);
-    channels_file = reverse_channels_file;
+    reversed_channel_map = 0;
     if ismember('reverse_channel_map', expstable.Properties.VariableNames) &&...
-            (expstable.reverse_channel_map(i) == 0)
-        channels_file = ord_channels_file;
+            (expstable.reverse_channel_map(i) == 1)
+        reversed_channel_map = 1;
+    end
+    trial_channels_file = channels_file;
+    if strcmp(exp_name, 'main-effect') == 0
+        trial_channels_file = channels_file_gfp;
     end
     channelTable = readChannelTable(...
-        channels_file, animal_code, meta, selected_channels_only, use_diode);
+        trial_channels_file, animal_code, meta, reversed_channel_map, ...
+        selected_channels_only, use_diode);
 
     dataArray = ReadSGLXData(meta, secondOffset, str2double(meta.fileTimeSecs) - secondOffset);
     dataArray = dataArray(channelTable.rec_order,:);
@@ -165,7 +166,7 @@ for i = 1:nexp
 %                    strrep(channelTable.channel_name{channel}, ' ', '')));
 
         % remove epochs with jumps in the signal
-        channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.5);
+        channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.5, 5);
         keep_sample = intersect(channel_keep_sample, keep_sample);
         %std_estimate = std_estimates.std_estimate(std_estimate_index);
         %std_estimate = median(ripple_detection_signal(keep_sample_fewer) / 0.6745);
@@ -213,6 +214,7 @@ for i = 1:nexp
             result_table.date(entry_i) = {dateddir};
             result_table.animal(entry_i) = {animal_code};
             result_table.file_name(entry_i) = expstable.dirname(i);
+            result_table.exp(entry_i) = {exp_name};
             trial = [expstable.dirname{i} '_' num2str(idivide(int16(trial_period_i-1),3))];
             result_table.trial(entry_i) = {trial};
             result_table.stage_desc(entry_i) = trialPeriods.stage_desc(trial_period_i);
@@ -241,10 +243,14 @@ for i = 1:nexp
                section_ripples = ripples(ripples(:,2) >= sec_start & ripples(:,2) <= sec_end,:);
             end
             nripples = size(section_ripples, 1);
+            result_table.nripples(entry_i) = size(section_ripples,1);
+            result_table.stage_dur_sec(entry_i) = sec_length;
+            result_table.swr_incidence(entry_i) = size(section_ripples,1) / sec_length;
+            result_table.ripple_peakpow(entry_i) = -1;
+            result_table.ripple_dur(entry_i) = -1;
+            result_table.ripple_freq(entry_i) = -1;
             if ~isempty(section_ripples)
                result_table.has_ripples(entry_i) = 1;
-               result_table.nripples(entry_i) = size(section_ripples,1);
-               result_table.swr_incidence(entry_i) = size(section_ripples,1) / sec_length;
                result_table.ripple_peakpow(entry_i) = mean(section_ripples(:,4));
                result_table.ripple_dur(entry_i) = mean(section_ripples(:,3) - section_ripples(:,1));
                result_table.ripple_freq(entry_i) = mean(section_ripples(:,5));
@@ -256,6 +262,7 @@ for i = 1:nexp
                ripples_table.abs_peak_t = ripples_table.peak_t + sec_start;
                ripples_table.date = repmat(dateddir, nripples, 1);
                ripples_table.animal = repmat(animal_code, nripples, 1);
+               ripples_table.exp = repmat({exp_name}, nripples, 1);
                ripples_table.file_name = repmat(expstable.dirname(i), nripples, 1);
                ripples_table.trial = repmat({trial}, nripples, 1);
                ripples_table.stage_desc = repmat({trialPeriods.stage_desc{trial_period_i}}, nripples, 1);
@@ -291,7 +298,7 @@ if ~selected_channels_only
 end
 
 %filename_infix = [filename_infix '_single_std'];
-outdir = [datarootdir filesep 'trial_results'];
+outdir = [datarootdir filesep 'trial_results_gfp'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
 writetable(result_table, [outdir filesep 'welch_psd_table' outfile_suffix]);
 writetable(all_ripples, [outdir filesep 'ripples' outfile_suffix]);

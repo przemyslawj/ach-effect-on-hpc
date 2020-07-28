@@ -9,6 +9,7 @@ is_after_ymaze = 0;
 datarootdir = '/mnt/DATA/chat_ripples/baseline';
 is_ymaze_trial = 0;
 secondOffset = 0;
+reversed_channel_map = 1;
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
@@ -44,7 +45,7 @@ for i = 1:nexp
         channels_file = ord_channels_file;
     end
     channelTable = readChannelTable(...
-        channels_file, animal_code, meta, selected_channels_only, use_diode);
+        channels_file, animal_code, meta, reversed_channel_map, selected_channels_only, use_diode);
     
     dataArray = ReadSGLXData(meta, secondOffset, str2double(meta.fileTimeSecs) - secondOffset);
     dataArray = dataArray(channelTable.rec_order,:);

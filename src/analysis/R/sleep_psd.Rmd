@@ -28,14 +28,15 @@ source('psd_fitting.R')
 
 
 ```{r include=FALSE}
+img_dir = paste0('/home/prez/tmp/ymaze_chat_x_ai32/img_gen/', experiment_name)
 experiment_name = 'baseline'
 diode.signal = TRUE
 data_dir = paste0('/mnt/DATA/chat_ripples/', experiment_name)
 
 if (diode.signal) {
-  psddf = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_diode_th6.csv', sep='/'))
+  psddf = read_csv(paste(data_dir, 'trial_results_gfp', 'welch_psd_table_diode_th6.csv', sep='/'))
 } else {
-  psddf = read_csv(paste(data_dir,'trial_results', 'welch_psd_table_th6.csv', sep='/'))
+  psddf = read_csv(paste(data_dir,'trial_results_gfp', 'welch_psd_table_th6.csv', sep='/'))
 }
 psddf$animal = as.factor(psddf$animal)
 psddf$channel = as.factor(psddf$channel)
@@ -172,7 +173,8 @@ ggsave(file=paste0(img_dir, '/', '2_psd_mean_all.pdf'),
 ```{r}
 plotted.lowfreq.fit = filter(joined.psd.fit.df, name != 'bg_high_freq')
 bind_rows(animals.psd, plotted.lowfreq.fit) %>%
-  filter(animal == 'BS') %>%
+  #filter(animal == 'BS') %>%
+  filter(animal == 'BD') %>%
   dplyr::mutate(name_laser=paste(name, laserOn, sep='_')) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, y=band_power, 
@@ -198,7 +200,7 @@ ggsave(file=paste0(img_dir, '/', '2_psd_fit_inset.pdf'),
 ```{r}
 trial.molten.psd = psd.molten %>%
   filter(state != 'scopolamine') %>%
-  filter(animal == 'BS') %>%
+  filter(animal == 'BD') %>%
   dplyr::mutate(trial_id_laser = paste(trial_id, laserOn, sep='_'))
 
 library(permute)
@@ -212,8 +214,8 @@ sample.n.trials = function(df, n=5) {
 }
 
 bind_rows(
-  sample.n.trials(filter(trial.molten.psd, stage_desc == 'before_stim'), n=5),
-  sample.n.trials(filter(trial.molten.psd, stage_desc == 'stim'), n=5)
+  sample.n.trials(filter(trial.molten.psd, stage_desc == 'before_stim'), n=10),
+  sample.n.trials(filter(trial.molten.psd, stage_desc == 'stim'), n=10)
 ) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, y=log(band_power), group=trial_id_laser, color=laserOn), size=0.5*px2pt) +

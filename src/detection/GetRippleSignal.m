@@ -1,3 +1,5 @@
+% Returns signal after applying moving average filter on the squared signal.
+% Moving average windows is equal to duration of 10.4 ms
 function [ripple_detection_signal] = GetRippleSignal(filtered, frequency)
 %windowLength = round(frequency/23);
 % Window length of 10.4 ms
