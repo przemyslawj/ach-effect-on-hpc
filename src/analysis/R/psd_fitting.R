@@ -78,7 +78,7 @@ fit.background.df = function(psd.molten,
                              fit.knee=TRUE, 
                              show.fit=FALSE,
                              extra.group.vars=c()) {
-  id.vars = c('animal', 'trial_id', 'stage_desc', 'laserOn', 'channelLocation')
+  id.vars = c('animal', 'trial_id', 'stage_desc', 'laserOn', 'channelLocation', 'exp')
   psd.entries = psd.molten %>% 
     dplyr::select(c(id.vars, extra.group.vars)) %>%
     dplyr::distinct()
@@ -87,6 +87,7 @@ fit.background.df = function(psd.molten,
     #print(c('Row', .x))
     entry.df = psd.molten %>%
       filter(.data$trial_id == psd.entries$trial_id[.x] &
+             .data$exp == psd.entries$exp[.x] &
              .data$stage_desc == psd.entries$stage_desc[.x] & 
              .data$laserOn == psd.entries$laserOn[.x] & 
              .data$channelLocation == psd.entries$channelLocation[.x])
