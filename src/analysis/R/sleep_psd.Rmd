@@ -213,7 +213,8 @@ ggsave(file=paste0(img_dir, '/', '2_psd_fit_inset.pdf'),
 ```{r}
 trial.molten.psd = psd.molten %>%
   filter(state != 'scopolamine') %>%
-  filter(animal == 'BD', exp == 'gfp-control') %>%
+  #filter(animal == 'BD', exp == 'gfp-control') %>%
+  filter(animal == 'BR', exp == 'main-effect') %>%
   dplyr::mutate(trial_id_laser = paste(trial_id, laserOn, sep='_'))
 
 library(permute)
@@ -227,8 +228,8 @@ sample.n.trials = function(df, n=5) {
 }
 
 bind_rows(
-  sample.n.trials(filter(trial.molten.psd, stage_desc == 'before_stim'), n=10),
-  sample.n.trials(filter(trial.molten.psd, stage_desc == 'stim'), n=10)
+  sample.n.trials(filter(trial.molten.psd, stage_desc == 'before_stim'), n=5),
+  sample.n.trials(filter(trial.molten.psd, stage_desc == 'stim'), n=5)
 ) %>%
   ggplot() +
   geom_line(aes(x=band_start_freq, y=log(band_power), group=trial_id_laser, color=laserOn), size=0.5*px2pt) +
