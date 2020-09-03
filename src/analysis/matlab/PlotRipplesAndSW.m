@@ -9,6 +9,7 @@ diode_ripples = 1;
 save_plots = 1;
 selected_channels_only = 1;
 
+
 channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
 channels_file_gfp = '/mnt/DATA/chat_ripples/channel_desc/channels_gfp.csv';    
 if ~is_ymaze_trial
@@ -16,13 +17,15 @@ if ~is_ymaze_trial
     datarootdir = '/mnt/DATA/chat_ripples/baseline';
 end
 
+use_diode = 1;
 ripples_filename = 'ripples_diode_th6.csv';
 
-ripplestable = readtable([datarootdir filesep 'trial_results_gfp' filesep ripples_filename]);
+ripplestable = readtable([datarootdir filesep 'trial_results' filesep ripples_filename]);
 if is_ymaze_trial
     secondOffset = 3;
     ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
 end
+ripplestable = ripplestable(strcmp(ripplestable.exp, 'main-effect' ) == 1, :);
 %ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
@@ -167,7 +170,7 @@ for gi = 1:max(g)
 
 
         if save_plots
-            fig_dir = fullfile(datarootdir, 'swrs_gfp', animal_code);
+            fig_dir = fullfile(datarootdir, 'swrs', animal_code);
             if ~isfile(fig_dir)
                 mkdir(fig_dir);
             end

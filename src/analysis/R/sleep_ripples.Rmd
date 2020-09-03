@@ -223,13 +223,13 @@ swr.baseline.summary %>%
   ggplot() +
   geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
   geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
-  geom_ribbon(aes(x=laserOn, 
-                  ymin=swr_incidence.mean - swr_incidence.sem, 
-                  ymax=swr_incidence.mean + swr_incidence.sem,
-                  group=animal), 
-                alpha=0.1) +
+  #geom_ribbon(aes(x=laserOn, 
+  #                ymin=swr_incidence.mean - swr_incidence.sem, 
+  #                ymax=swr_incidence.mean + swr_incidence.sem,
+  #                group=animal), 
+  #              alpha=0.1) +
   xlab('Stimulation') + ylab('Ripple incidence (Hz)') +
-  facet_grid(. ~ exp + channelLocation) +
+  facet_grid(. ~ channelLocation + exp) +
   scale_x_discrete(labels=xlabels) +
   scale_y_continuous(breaks=c(0.0, 0.2, 0.4)) +
   gtheme
@@ -250,7 +250,8 @@ psddf %>%
 BD ripples over time
 ```{r}
 psddf %>%
-  filter(animal == 'BD', stage_desc != 'after_stim', exp == 'gfp-control') %>%
+  filter(animal == 'BD', stage_desc != 'after_stim') %>%
+  filter(channelLocation == 'CA3') %>%
   ggplot() +
   geom_point(aes(x=trial_id, y=swr_incidence, color=laserOn)) +
   facet_grid(channelLocation ~ .) +

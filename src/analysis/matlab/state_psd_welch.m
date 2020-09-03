@@ -1,11 +1,11 @@
 %% setup results
 ripple_std_thr = 6;
-use_diode = 0;
+use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
-is_baseline = 1;
-is_ymaze_trial = 0;
+is_baseline = 0;
+is_ymaze_trial = 1;
 
 secondOffset = 0;
 
@@ -23,7 +23,7 @@ if is_urethane
     datarootdir = '/mnt/DATA/chat_ripples/urethane';
 end
 
-trials_fpath = [datarootdir filesep 'trials.csv'];
+trials_fpath = [datarootdir filesep 'trials_new.csv'];
 if is_after_ymaze
     trials_fpath = [datarootdir filesep 'trials_after.csv'];
 end
@@ -151,8 +151,8 @@ for i = 1:nexp
         end
     end
 
-    keep_sample = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 0.5);
-    keep_sample_fewer = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 1);
+    keep_sample = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 0.2);
+    keep_sample_fewer = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 0.4);
     for channel = 1:nchans
         if strcmp(channelTable.location{channel}, 'Laser') || ...
                 strcmp(channelTable.location{channel}, 'EMG')
@@ -166,14 +166,15 @@ for i = 1:nexp
 %                    strrep(channelTable.channel_name{channel}, ' ', '')));
 
         % remove epochs with jumps in the signal
-        channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.5, 5);
-        keep_sample = intersect(channel_keep_sample, keep_sample);
+        channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.2, 10);
+        channel_keep_sample = intersect(channel_keep_sample, keep_sample);
+        channel_keep_sample_fewer = intersect(channel_keep_sample, keep_sample_fewer);
         %std_estimate = std_estimates.std_estimate(std_estimate_index);
         %std_estimate = median(ripple_detection_signal(keep_sample_fewer) / 0.6745);
-        if numel(keep_sample_fewer) < 2
-            keep_sample_fewer = keep_sample;
+        if numel(channel_keep_sample_fewer) < 2
+            channel_keep_sample_fewer = channel_keep_sample;
         end
-        std_estimate = std(ripple_detection_signal(keep_sample_fewer));
+        std_estimate = std(ripple_detection_signal(channel_keep_sample_fewer));
         fprintf('Using std estimate %.8f\n', std_estimate);
         [ripples, sd, normalizedSquaredSignal] = MyFindRipples(time', filtered(channel,:)', ...
                      'frequency', fs, ...
@@ -181,7 +182,7 @@ for i = 1:nexp
                      'durations', [10 20 300],...
                      'std', std_estimate);
         if ~isempty(ripples)
-            keep_ripples = ismember(int32(ripples(:,2) * fs), keep_sample);
+            keep_ripples = ismember(int32(ripples(:,2) * fs), channel_keep_sample);
             if ~all(keep_ripples)
                 warning('Rejected %d ripple(s) because of the noise detected in EMG', ...
                     sum(keep_ripples==0));
@@ -245,6 +246,7 @@ for i = 1:nexp
             nripples = size(section_ripples, 1);
             result_table.nripples(entry_i) = size(section_ripples,1);
             result_table.stage_dur_sec(entry_i) = sec_length;
+            result_table.noise_dur_sec(entry_i) = length(setdiff(period_start:period_end, keep_sample)) / fs;
             result_table.swr_incidence(entry_i) = size(section_ripples,1) / sec_length;
             result_table.ripple_peakpow(entry_i) = -1;
             result_table.ripple_dur(entry_i) = -1;
@@ -298,7 +300,7 @@ if ~selected_channels_only
 end
 
 %filename_infix = [filename_infix '_single_std'];
-outdir = [datarootdir filesep 'trial_results_gfp'];
+outdir = [datarootdir filesep 'trial_results_new'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
 writetable(result_table, [outdir filesep 'welch_psd_table' outfile_suffix]);
 writetable(all_ripples, [outdir filesep 'ripples' outfile_suffix]);

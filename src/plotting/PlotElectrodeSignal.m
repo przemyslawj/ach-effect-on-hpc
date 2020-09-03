@@ -4,9 +4,9 @@ path = '/mnt/DATA/chat_ripples/baseline/';
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
 
-selected_channels_only = 1;
+selected_channels_only = 0;
 use_diode = 1;
-reversed_channel_map = 0;
+reversed_channel_map = 1;
 
 secondOffset = 0;
 meta = ReadMeta(binName, path);
@@ -18,7 +18,7 @@ uppercase_idx = find(isstrprop(binName, 'upper'));
 animal_code = binName(uppercase_idx(1:2));
 %'/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv',...
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels_gfp.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels.csv',...
     animal_code, meta, reversed_channel_map, selected_channels_only, use_diode);
 
 dataArray = ReadSGLXData(meta, secondOffset, lengthSeconds);

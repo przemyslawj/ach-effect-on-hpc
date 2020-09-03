@@ -1,5 +1,5 @@
 %path = '/mnt/DATA/Clara/baseline/2018-09-06/signal';
-path = '/mnt/DATA/chat_ripples/baseline/';
+path = '/mnt/DATA/chat_ripples/y-maze/';
 %path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
 
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
@@ -7,7 +7,7 @@ fprintf('Processing file: %s\n', binName);
 
 showFiltered = 1;
 showDiode = 1;
-reversed_channel_map = 0;
+reversed_channel_map = 1;
 
 secondOffset = 0;
 meta = ReadMeta(binName, path);
@@ -16,7 +16,7 @@ uppercase_idx = find(isstrprop(binName, 'upper'));
 animal_code = binName(uppercase_idx(1:2));
     %'/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv',...
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels_gfp.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels.csv',...
     animal_code, meta, reversed_channel_map);
 
 lengthSeconds = min(120, str2double(meta.fileTimeSecs) - secondOffset);

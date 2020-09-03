@@ -80,7 +80,7 @@ fit.background.df = function(psd.molten,
                              extra.group.vars=c()) {
   id.vars = c('animal', 'trial_id', 'stage_desc', 'laserOn', 'channelLocation', 'exp')
   psd.entries = psd.molten %>% 
-    dplyr::select(c(id.vars, extra.group.vars)) %>%
+    dplyr::select(all_of(c(id.vars, extra.group.vars))) %>%
     dplyr::distinct()
   
   fit.psd.df = map_dfr(1:nrow(psd.entries), ~ {

@@ -9,7 +9,8 @@ create.animal.summary = function(df, var) {
   var = enquo(var)
   group_by(df, animal, exp, laserOn, stage_desc, channelLocation) %>% 
     dplyr::summarise(var.mean=mean(!!var, na.rm=TRUE),
-                     var.sem=sem(!!var))
+                     var.sem=sem(!!var),
+                     n=n())
 }
 
 plot.laser.change = function(df, var) {
@@ -25,16 +26,22 @@ plot.laser.change = function(df, var) {
                     ymax=var.mean + var.sem,
                     group=animal), 
                 alpha=0.1) +
-    facet_grid(. ~ exp + channelLocation, scales = 'free') +
+    facet_grid(. ~ channelLocation + exp, scales = 'free') +
     xlab('Stimulation') +
     scale_x_discrete(labels=xlabels) +
     gtheme
 }
 
-calc.laser.fixed.effects = function(tested.df, var) {
+calc.laser.fixed.effects = function(tested.df, 
+                                    var, 
+                                    fixed.effects.str = 'laserOn * exp',
+                                    random.effects.str = '(1 + laserOn | exp_animal)') {
   var = enquo(var)
   var.name = quo_name(var)
-  form = glue::glue('{varname} ~ laserOn + exp + laserOn * exp + (1 + laserOn | exp_animal)', varname=var.name)
+  form = glue::glue('{varname} ~ {fixed.effects} + {random.effects}', 
+                    varname=var.name,
+                    fixed.effects=fixed.effects.str,
+                    random.effects=random.effects.str)
   m.full = lmerTest::lmer(form, 
                           data=tested.df,
                           REML = TRUE) 
