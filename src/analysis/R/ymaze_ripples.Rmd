@@ -28,16 +28,19 @@ source('psd_fitting.R')
 ```{r read_data,  include=FALSE}
 diode.signal = TRUE
 
-data_dir = '/mnt/DATA/chat_ripples/y-maze/'
 img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
+data_dir = '/mnt/DATA/chat_ripples/y-maze'
 
+results_dir = file.path(data_dir, 'trial_results_merged')
 if (diode.signal) {
-  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_diode_th6.csv', sep='/'))
-  ripples.ymaze = read_csv(paste(data_dir, 'trial_results', 'ripples_diode_th6.csv', sep='/'))
+  psddf.inputfilename = 'welch_psd_table_diode_th6.csv'
+  ripples.inputfilename = 'ripples_diode_th6.csv'
 } else {
-  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_th6.csv', sep='/'))
-  ripples.ymaze = read_csv(paste(data_dir, 'trial_results', 'ripples_th6.csv', sep='/'))
+  psddf.inputfilename = 'welch_psd_table_th6.csv'
+  ripples.inputfilename = 'ripples_th6.csv'
 }
+psddf.ymaze = read_csv(file.path(results_dir, psddf.inputfilename))
+ripples.ymaze = read_csv(file.path(results_dir, ripples.inputfilename))
 
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 ripples.ymaze = prepare.ymaze.df(ripples.ymaze)
@@ -46,7 +49,8 @@ ripples.ymaze = prepare.ymaze.df(ripples.ymaze)
 
 Join trial metadata (includes if the mouse made correct choice)
 ```{r}
-trial.info.df = read_csv(paste(data_dir, 'trials.csv', sep='/')) %>%
+trials.info.filename = 'trials_merged.csv'
+trial.info.df = read_csv(paste(data_dir, trials.info.filename, sep='/')) %>%
   dplyr::mutate(file_name=paste0('signal/', animal, '_trial_', trial, '_g0'))
 trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
 ```
@@ -63,11 +67,13 @@ ripples.ymaze = left_join(ripples.ymaze, dplyr::select(trial.info.df, -trial, -s
 Performance reached 70 % 
 ```{r}
  psddf.ymaze %>%
+  filter(stage_desc == 'Total', channelLocation == 'CA1') %>%
   group_by(animal, learning_day) %>%
-  dplyr::summarise(pct.correct=mean(correct)) %>% 
+  dplyr::summarise(pct.correct=mean(correct), ncorrect=sum(correct)) %>% 
   group_by(learning_day) %>%
   dplyr::summarise(mean(pct.correct),
-                   sem(pct.correct))
+                   sem(pct.correct), 
+                   mean(ncorrect))
 ```
 
 Duration of navigation vs goal zone at different of learning
@@ -109,44 +115,47 @@ psddf.ymaze.correct %>%
 
 Filter animals with few ripples (swr incidence < 0.02)
 ```{r}
+min.stim.stage.dur.sec = 10
 nripples.summary = psddf.ymaze.correct %>%
-  filter(laserOn == 0, learning_day >= 1, stage_desc == 'Total', channelLocation == 'CA1') %>%
+  filter(laserOn == 0, learning_day >= 1, stage_desc == 'DuringStim', channelLocation == 'CA1') %>%
+  filter(stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec) %>%
   group_by(animal) %>%
   dplyr::summarise(has_ripples.pct=sum(swr_incidence > 0) / n(),
                    mean.incidence = mean(swr_incidence)) 
-psddf.ymaze.correct = filter(psddf.ymaze.correct, 
-                             animal %in% subset(nripples.summary, mean.incidence >= 0.03)$animal)
+nripples.summary
+#psddf.ymaze.correct = filter(psddf.ymaze.correct, 
+#                             animal %in% subset(nripples.summary, mean.incidence >= 0.01)$animal)
 ```
 
 Plot ripples over trial
 ```{r}
 selected.stages = c('StartZone', 'DuringStim')
-ripples.sample = ripples.ymaze %>% 
-  filter(correct == 1) %>% 
-  filter(learning_day == 6, animal=='PT') %>%
+trials.sample = psddf.ymaze.correct %>%
+  filter(learning_day == 6, animal == 'PT') %>%
+  #filter(learning_day == 4, animal=='BR') %>%
   filter(stage_desc %in% selected.stages)
 
-ripples.sample$stage_desc = factor(ripples.sample$stage_desc, 
-                                   levels=selected.stages, 
-                                   labels=c('Start', 'Goal'),
-                                   ordered=TRUE)
-
-trial.renumber = ripples.sample %>% 
+trial.renumber = trials.sample %>% 
   dplyr::select(laserOn, channelLocation, trial_no) %>% 
   dplyr::group_by(laserOn, channelLocation) %>%
   dplyr::distinct() %>%
   dplyr::arrange(trial_no) %>%
   dplyr::mutate(trial_rank = row_number(trial_no))
-  
+
+ripples.sample = ripples.ymaze %>% 
+  filter(stage_desc %in% selected.stages)  %>%
+  filter(trial_id %in% trials.sample$trial_id) 
+
+trials.sample = left_join(trials.sample, trial.renumber)
 ripples.sample = left_join(ripples.sample, trial.renumber)
 
-ripples.sample %>%
-  ggplot() +
-  geom_tile(aes(x=peak_t, y=trial_rank, fill=laserOn), width=0.5) +
+ ggplot() +
+  geom_tile(data=trials.sample, aes(x=stage_dur_sec/2, y=trial_rank, width=stage_dur_sec), fill='grey90', colour='grey50') +
+  geom_tile(data=ripples.sample, aes(x=peak_t, y=trial_rank, fill=laserOn), width=0.5) +
   facet_grid(channelLocation + laserOn ~ stage_desc) +
   scale_fill_manual(labels=c('Off', 'On'), values=c(nolaser.col, laser.col)) +
   gtheme +
-  scale_y_continuous(breaks=c(2,4))+
+  scale_y_continuous(breaks=c(2,4), trans='reverse') +
   xlab('Time (s)') + ylab('Trial number')
 
   ggsave(paste0(img_dir, '/indiv_ripples_time.pdf'), units = 'cm',
@@ -158,14 +167,16 @@ Ripple incidence over learning
 ```{r}
 psddf.ymaze.correct %>%
   filter(stage_desc == 'DuringStim') %>%
+  filter(stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec) %>%
   ggplot() +
-  geom_jitter(aes(x=learning_day, y=swr_incidence, color=laserOn), width=0.2) +
+  geom_jitter(aes(x=learning_day, y=swr_incidence, color=laserOn), width=0.3) +
   facet_grid(animal ~ channelLocation, scales='free')
 ```
 
 
 ```{r}
 swr.ymaze.summary = psddf.ymaze.correct %>%
+  filter(stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec) %>%
   group_by(animal, laserOn, stage_desc, channelLocation) %>% 
   dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
                    swr_incidence.sem=sem(swr_incidence),
@@ -180,7 +191,7 @@ swr.ymaze.summary %>%
   #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
   #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
   ggplot() +
-  #geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
+  geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
   geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
   geom_ribbon(aes(x=laserOn, 
                   ymin=swr_incidence.mean - swr_incidence.sem, 
@@ -199,6 +210,27 @@ ggsave(paste0(img_dir, '/ripples_change.pdf'), units = 'cm',
        height=5, width=4.5)
 ```
 
+Day summaries
+```{r}
+psddf.ymaze.correct %>%
+  filter(stage_dur_sec - noise_dur_sec >= 10) %>%
+  filter(stage_desc == 'DuringStim')  %>%
+  #group_by(channelLocation, laserOn, date, learning_day, animal) %>%
+  #dplyr::summarise(swr_incidence.mean = mean(swr_incidence)) %>%
+  #dplyr::mutate(animal_day = paste(animal, learning_day, sep='_')) %>%
+  filter(animal %in% c('BR', 'BS', 'OS', 'TL', 'PT')) %>%
+  ggplot() +
+  #geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal_day, color=animal)) +
+  #geom_violin(aes(x=laserOn, y=swr_incidence), width=0.1, shape=1) +
+  geom_boxplot(aes(x=laserOn, y=swr_incidence), width=0.3) +
+  geom_jitter(aes(x=laserOn, y=swr_incidence), width=0.1, shape=1) +
+  #facet_grid(learning_day ~ channelLocation, scales='free_y') +
+  facet_grid(. ~ channelLocation, scales='free_y') +
+  gtheme
+```
+
+
+
 Day mean per animal
 ```{r}
 swr.ymaze.summary %>% 
@@ -212,7 +244,10 @@ tested.ymaze.correct = filter(psddf.ymaze.correct,
                               #laserOn == 0,
                               channelLocation == 'CA1',
                               stage_desc == 'DuringStim') %>%
-  dplyr::mutate(early.learning=(learning_day < 5))
+  filter(!(animal %in% c('GD'))) %>%
+  #filter(animal %in% c('BR', 'BS', 'TL', 'OS', 'PT')) %>%
+  filter(stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec)
+  #dplyr::mutate(early.learning=(learning_day < 5))
 tested.ymaze.correct %>% group_by(animal, channelLocation, laserOn) %>%
   dplyr::summarise(n=n()) %>%
   group_by(laserOn) %>% 
@@ -227,7 +262,7 @@ tested.ymaze.correct %>% group_by(laserOn) %>%
 m.full = lmerTest::lmer(swr_incidence ~ laserOn + (1 + laserOn | animal), 
                         data=tested.ymaze.correct, 
                         REML = TRUE) 
-plot.model.diagnostics(m.full, tested.ymaze.correct$animal, tested.ymaze.correct$early.learning) 
+plot.model.diagnostics(m.full, tested.ymaze.correct$animal, tested.ymaze.correct$laserOn) 
 summary(m.full)
 coef(m.full)$animal
 anova(m.full, refit=FALSE, ddf='Satterthwaite')

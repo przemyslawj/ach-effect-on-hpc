@@ -1,8 +1,8 @@
 max_recording_ripples = 100;
 
-datarootdir = '/mnt/DATA/chat_ripples/baseline';
+datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 secondOffset = 0;
-is_ymaze_trial = 0;
+is_ymaze_trial = 1;
 is_after_ymaze = 0;
 
 diode_ripples = 1;
@@ -10,7 +10,7 @@ save_plots = 1;
 selected_channels_only = 1;
 
 
-channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
+channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 channels_file_gfp = '/mnt/DATA/chat_ripples/channel_desc/channels_gfp.csv';    
 if ~is_ymaze_trial
     channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
@@ -20,7 +20,7 @@ end
 use_diode = 1;
 ripples_filename = 'ripples_diode_th6.csv';
 
-ripplestable = readtable([datarootdir filesep 'trial_results' filesep ripples_filename]);
+ripplestable = readtable([datarootdir filesep 'trial_results_merged' filesep ripples_filename]);
 if is_ymaze_trial
     secondOffset = 3;
     ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
@@ -28,7 +28,7 @@ end
 ripplestable = ripplestable(strcmp(ripplestable.exp, 'main-effect' ) == 1, :);
 %ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);
 
-trials_fpath = [datarootdir filesep 'trials.csv'];
+trials_fpath = [datarootdir filesep 'trials_merged.csv'];
 if is_after_ymaze
     trials_fpath = [datarootdir filesep 'trials_after.csv'];
 end
@@ -44,8 +44,8 @@ ripplestable.dated_file_channel = strcat(...
 for gi = 1:max(g)
     group_file_indecies = find(g == gi);
     group_ripplestable = ripplestable(group_file_indecies,:);    
-    animal_code = group_ripplestable.animal{1};
-    exp_name = group_ripplestable.exp{1};
+    animal_code = strtrim(group_ripplestable.animal{1});
+    exp_name = strtrim(group_ripplestable.exp{1});
     
     dateddir = datestr(group_ripplestable.date(1), 'yyyy-mm-dd');
     signalpath = [ datarootdir filesep dateddir filesep strtrim(group_ripplestable.file_name{1})];
@@ -61,9 +61,9 @@ for gi = 1:max(g)
         trial_channels_file = channels_file_gfp;
     end
     expstable_row = find(expstable.date == group_ripplestable.date(1) & ...
-      strcmp(expstable.animal, animal_code) & ...
-      strcmp(expstable.dirname, group_ripplestable.file_name{1}) & ...
-      strcmp(expstable.exp, exp_name));
+      strcmp(strtrim(expstable.animal), animal_code) & ...
+      strcmp(strtrim(expstable.dirname), strtrim(group_ripplestable.file_name{1})) & ...
+      strcmp(strtrim(expstable.exp), exp_name));
     
     channelTable = readChannelTable(...
         trial_channels_file, animal_code, meta, ...
@@ -170,7 +170,7 @@ for gi = 1:max(g)
 
 
         if save_plots
-            fig_dir = fullfile(datarootdir, 'swrs', animal_code);
+            fig_dir = fullfile(datarootdir, 'swrs_merged', animal_code);
             if ~isfile(fig_dir)
                 mkdir(fig_dir);
             end

@@ -16,11 +16,11 @@ function [filtered] = applyRippleFilter(data, channelTable, fs)
             elseif strcmp(loc, 'Laser')
                 filtered(chan,:) = x / laser_scaler;
             else
-                passband = [80 250];
-                %passband = [100 250];
-                %if strcmp(loc, 'CA3')
-                %    passband = [150 250];
-                %end
+                %passband = [80 250];
+                passband = [100 250];
+                if strcmp(loc, 'CA3')
+                    passband = [150 250];
+                end
                 [b, a] = cheby2(filterOrder,filterRipple,passband/nyquist);
                 filtered(chan,:) = filtfilt(b, a, x);
             end
