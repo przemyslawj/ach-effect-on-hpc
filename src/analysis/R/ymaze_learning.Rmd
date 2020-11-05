@@ -117,39 +117,36 @@ df.learnt.90 = filter(df.learnt, criterion == 'learnt.90')
 library(ggpubr)
 df.learnt %>%
   filter(criterion == 'learnt.80') %>%
-  #ggplot(aes(x=cond, y=learnt.day)) +
-  #geom_boxplot(aes(colour=cond), outlier.size=0) +
-  ggpubr::ggboxplot(x='cond', y='learnt.day', outlier.shape=NA) +
-  geom_dotplot(aes(colour=cond), 
-               binaxis="y", stackdir="center", fill=NA,
-               binwidth=0.2, dotsize=1, stackratio=0.8, width=px2pt * 1) +
-  stat_compare_means(aes(label = paste0('p=', ..p.format..)),
-                     method='wilcox.test',
-                     comparisons=list(c(1,3), c(1,4)),
-                     label.y=c(6.5,7.4)) +
+  ggplot(aes(x=cond, y=learnt.day, colour=cond)) +
+  geom_boxplot(colour='black', outlier.size=0, outlier.shape=NA) +
+  geom_dotplot(binaxis="y", stackdir="center", fill=NA,
+               binwidth=0.2, dotsize=2, stackratio=0.8, width=px2pt * 1) +
   gtheme +
   scale_color_manual(values=cond.cols) +
   #scale_fill_manual(values=cond.cols) +
   theme(axis.text.x=element_text(angle = 45, hjust = 1)) +
   xlab('') + ylab('Days until learned (≥ 80 %)') +
+  ylim(c(0, 7)) +
   theme(legend.position = 'none') 
 
-ggsave(paste0(img_dir, 'learnt_boxplot.pdf'), width=5.6, 
-       height=7.5, unit='cm', dpi=300, device=cairo_pdf)
+ggsave(paste0(img_dir, 'learnt_boxplot.pdf'), width=5.9, 
+       height=4.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
 ```{r}
+group_by(df.learnt.80, cond) %>%
+  dplyr::summarise(mean(learnt.day), sem(learnt.day))
+
+comparison.aov = aov(learnt.day ~ cond, df.learnt.80)
+shapiro.test(residuals(comparison.aov))
+#summary(comparison.aov)
+#TukeyHSD(comparison.aov)
+
 kruskal.test(learnt.day ~ cond, df.learnt, subset=criterion=='learnt.80')
 library(FSA)
-dunnTest(learnt.day ~ cond, df.learnt.70, method='none')
+dunnTest(learnt.day ~ cond, df.learnt.80, method='holm')
 ```
 
-Tukey multiple comparisons of means test
-```{r}
-m.aov = aov(learnt.day ~ cond, df.learnt, subset=criterion=='learnt.80') 
-summary(m.aov)
-TukeyHSD(m.aov, 'cond')
-```
 
 ```{r}
 wtdf.raw = read_csv(paste0(ymaze_results_dir, 'wt_learning_perf.csv'))
@@ -205,31 +202,27 @@ wtdf.learnt = wtdf %>%
 
 ```{r}
 wtdf.learnt %>%
-  #ggplot(aes(x=cond, y=learnt.day)) +
-  #geom_boxplot(aes(colour=cond), outlier.size=0) +
-  ggpubr::ggboxplot(x='cond', y='learnt.day', outlier.shape=NA) +
+  ggplot(aes(x=cond, y=learnt.day, colour=cond)) +
+  geom_boxplot(colour='black', outlier.size=0, outlier.shape=NA) +
   geom_dotplot(aes(color=cond), 
                binaxis="y", stackdir="center", fill=NA, 
-               binwidth=0.2, dotsize=1, stackratio=0.8, alpha=0.7) +
-  stat_compare_means(aes(label = paste0('p=', ..p.format..)),
-                     method='t.test',
-                     comparisons=list(c(1,2))) +
+               binwidth=0.2, dotsize=2, stackratio=0.8, alpha=0.7) +
   gtheme +
   theme(axis.text.x=element_text(angle = 30, hjust = 1)) +
   scale_color_manual(values=c(cond.cols[1], cond.cols[4])) +
   scale_fill_manual(values=c(cond.cols[1], cond.cols[4])) +
   xlab('') + ylab('Days until learned (≥ 80 %)') +
-  ylim(c(1,7))+
+  ylim(c(0,7))+
   theme(legend.position = 'none') 
 
-ggsave(paste0(img_dir, 'wtlearnt_boxplot.pdf'), width=5.5, 
-       height=6, units='cm', dpi=300, device=cairo_pdf)
+ggsave(paste0(img_dir, 'wtlearnt_boxplot.pdf'), width=4.0, 
+       height=4.0, units='cm', dpi=300, device=cairo_pdf)
 
 ```
 ```{r}
 shapiro.test(subset(wtdf.learnt, cond == 'No stim')$learnt.day)
 shapiro.test(subset(wtdf.learnt, cond == 'Goal')$learnt.day)
-t.test(learnt.day ~ cond, data=wtdf.learnt)
+summary(aov(learnt.day ~ cond, data=wtdf.learnt))
 ```
 Joined ChAT and WT
 ```{r}
@@ -249,7 +242,7 @@ learnt.joined %>%
                binwidth=0.2, dotsize=1, stackratio=0.8) +
   stat_compare_means(aes(label = paste0('p=', ..p.format..)),
                      method='t.test',
-                     comparisons=list(c(1,3), c(1,4), c(4,6), c(4,5))) +
+                     comparisons=list(c(1,3), c(3,4), c(1,4), c(4,6), c(4,5))) +
   scale_color_manual(values=strain.cond.cols) +
   gtheme +
   theme(axis.text.x=element_text(angle = 30, hjust = 1),
@@ -263,7 +256,9 @@ ggsave(paste0(img_dir, 'joined_dotplot.pdf'), width=8,
 
 ```{r}
 kruskal.test(learnt.day ~ strain_cond, learnt.joined)
-dunnTest(learnt.day ~ strain_cond, learnt.joined, method='none')
+TukeyHSD(aov(learnt.day ~ strain_cond, df.learnt.80))
+#summary(aov(learnt.day ~ strain_cond, learnt.joined))
+#TukeyHSD(aov(learnt.day ~ strain_cond, learnt.joined))
 ```
 ```{r}
 joined.summary.df = bind_rows(wtdf, df) %>% 

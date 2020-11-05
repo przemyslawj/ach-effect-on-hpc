@@ -50,6 +50,7 @@ function [ripples,sd,normalizedSquaredSignal] = MyFindRipples(time, signal, vara
 
 % Default values
 frequency = 1250;
+ripple_freq_band = [80 250];
 show = 'off';
 lowThresholdFactor = 2; % Ripple envoloppe must exceed lowThresholdFactor*stdev
 highThresholdFactor = 5; % Ripple peak must exceed highThresholdFactor*stdev
@@ -204,8 +205,8 @@ for i = 1:size(ripples,1)
     end_i = int32((ripples(i,3) - time(1)) * frequency);
     x = signal(start_i:end_i);
 
-    [pxx, freqs] = pmtm(x, 3, length(x), frequency);
-    ripple_band_i = find(freqs > 80);
+    [pxx, freqs] = pmtm(x, 3, ripple_freq_band(1):ripple_freq_band(2), frequency);
+    ripple_band_i = find(freqs >= ripple_freq_band(1) & freqs <= ripple_freq_band(2));
     ripple_band_freqs = freqs(ripple_band_i);
     [~, maxValIndex] = max(pxx(ripple_band_i));
     ripples(i,5) = ripple_band_freqs(maxValIndex);

@@ -1,11 +1,13 @@
 use_diode = 1;
 is_ymaze_trial = 1;
-animal = 'BS';
+%animal = 'BS';
+animal = 'BD';
 
 if is_ymaze_trial
     datarootdir = '/mnt/DATA/chat_ripples/y-maze';
     secondOffset = 2.5;
     trial_date = datetime('2019-11-13', 'InputFormat', 'yyyy-MM-dd');
+    trial_date = datetime('2020-08-29', 'InputFormat', 'yyyy-MM-dd');
     laserOn = 0;
 else
     datarootdir = '/mnt/DATA/chat_ripples/baseline';
@@ -16,9 +18,7 @@ end
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-%reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_same_side.csv';
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
-ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
+channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 nexp = size(expstable, 1);
 
 if is_ymaze_trial
@@ -30,7 +30,6 @@ if is_ymaze_trial
 else
     daytable = expstable(...
          strcmp(expstable.animal, repmat({animal}, nexp, 1)), :);
-    %daytable = expstable;
 end
 
 result_table = table();
@@ -68,13 +67,14 @@ for i = 1:size(daytable, 1)
     end
     fprintf('Processing file for date=%s file=%s\n', date_str, binfile.name);
     meta = ReadMeta(binfile.name, binfile.folder);
-    channels_file = reverse_channels_file;
-    if ismember('reverse_channel_map', daytable.Properties.VariableNames) &&...
-            (daytable.reverse_channel_map(i) == 0)
-        channels_file = ord_channels_file;
+    reversed_channel_map = 0;
+    if ismember('reverse_channel_map', expstable.Properties.VariableNames)
+        reversed_channel_map = expstable.reverse_channel_map(i);
     end
     channelTable = readChannelTable(...
-        channels_file, animal_code, meta, 1, use_diode);
+        channels_file, animal_code, meta, reversed_channel_map, ...
+        selected_channels_only, use_diode);
+
     laserChannelIdx = find(strcmp(channelTable.location, 'Laser'));
     emgIdx = find(strcmp(channelTable.location, 'EMG'));
     

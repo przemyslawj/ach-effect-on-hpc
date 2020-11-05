@@ -22,6 +22,7 @@ summarise = dplyr::summarise
 library(purrr)
 sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
 source('plotting_params.R')
+source('laser_stats.R')
 ```
 
 
@@ -42,31 +43,28 @@ freq.bands.df = data.frame(
 
 
 ```{r include=FALSE}
-data_dir = '/mnt/DATA/Clara/urethane'
-psddf.light = read_csv(paste(data_dir, 'psd_table_urethane_light.csv', sep='/')) %>%
-  mutate(state = 'Light')
-psddf.scopolamine = read_csv(paste(data_dir, 'psd_table_urethane_scopolamine.csv', sep='/')) %>%
-  mutate(state = 'Scopolamine')
-# data_dir = '/mnt/DATA/chat_ripples/urethane'
-# psddf.light = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_urethane_light.csv', sep='/')) %>%
-#   mutate(state = 'Light')
-# psddf.scopolamine = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_urethane_scopolamine.csv', sep='/')) %>%
-#   mutate(state = 'Scopolamine') 
+data_dir = '/mnt/DATA/chat_ripples/urethane/'
 
-psddf = bind_rows(psddf.light, psddf.scopolamine)
+if (diode.signal) {
+  input.filename = 'welch_psd_table_diode_th7.csv'
+} else {
+  input.filename = 'welch_psd_table_th7.csv'
+}
+psddf = 
+  read_csv(file.path(data_dir, 'trial_results', input.filename))
+
 psddf$state = as.factor(psddf$state)
 
 psddf = psddf %>%
   mutate(trial_id=paste(state, trial ,sep='_')) %>%
-  mutate(stage_desc=ifelse(laserOn==1, 'stim', ifelse(row %% 3 == 1, 'before_stim', 'after_stim')))
+  filter(channelLocation == 'CA1')
   
 psddf$trial_id = as.factor(psddf$trial_id)
 psddf$animal = as.factor(psddf$animal)
-psddf$date = '2018-01-01'
-psddf$channelLocation = 'CA3'
+
 psddf$laserOn = as.factor(psddf$laserOn)
 
-psd.molten = melt.freq.bands(psddf, extra.id.vars = c('state'),
+psd.molten = melt.freq.bands(psddf, extra.id.vars = c('state', 'exp'),
                              freq.bands = c(exp(seq(0.1, 5.6, by=0.035))) - 1)
 ```
 
@@ -83,8 +81,8 @@ animals.psd %>%
                 group=laserOn, color=laserOn)) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-20, ymax=15, alpha=0.05, fill='grey10') +
-  facet_wrap(animal ~ state, scales = 'free') +
-  scale_x_log10(limits=c(0.5,100), breaks=axis.breaks, labels=axis.labels) +
+  facet_wrap(animal + channelLocation ~ state, scales = 'free') +
+  scale_x_log10(limits=c(0.5,200), breaks=axis.breaks, labels=axis.labels) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   #scale_y_continuous(breaks=c(-15,-10))+
   gtheme +
@@ -97,10 +95,10 @@ ggsave(file=paste0(img_dir, '/', '4_psd_urethane.pdf'),
 
 ## Fit theta
 ```{r}
-fit.psd.df = fit.background.df(filter(psd.molten, stage_desc != 'after_stim'), 
+fit.psd.df = fit.background.df(filter(psd.molten, stage_desc != 'after_stim', channelLocation == 'CA1'), 
                                freq.bands.df, 
-                               #c(1.2, 15), 
-                               c(1, 40),
+                               #c(1, 15), 
+                               c(1, 45),
                                fit.knee = FALSE, show.fit=TRUE, extra.group.vars = c('state'))
 fit.psd.df$laserOn = as.factor(fit.psd.df$laserOn)
 
@@ -111,31 +109,36 @@ fit.psd.df = fit.psd.df %>%
 
 ```{r}
 var = quo(pow_theta)
-g.theta.power = fit.psd.df %>%
-  filter(stage_desc != 'after_stim') %>%
+
+urethane.theta.fit.df = fit.psd.df %>%
+  filter(stage_desc != 'after_stim', channelLocation == 'CA1') %>%
+  dplyr::mutate(exp=state)
+
+g.theta.power = urethane.theta.fit.df %>%
   ggplot(aes(x=laserOn, y=!!var, group=trial_id)) +
   #geom_jitter(aes(color=animal), height = 0, width=0.2) +
   geom_line() +
-  facet_grid(. ~ state) +
+  facet_grid(channelLocation ~ state) +
   gtheme +
   scale_x_discrete(labels=c('off', 'on')) +
   ylab('Relative Theta Power (2.5 - 5 Hz)') + xlab('Stimulation')
 g.theta.power
 
-wilcox.test(pow_theta ~ laserOn, fit.psd.df, subset = state == 'Light', paired=TRUE)
-shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 0)$pow_theta)
-shapiro.test(subset(fit.psd.df, state == 'Light' & laserOn == 1)$pow_theta)
+wilcox.test(pow_theta ~ laserOn, urethane.theta.fit.df, subset = (state == 'Light'), paired=TRUE)
+shapiro.test(subset(urethane.theta.fit.df, state == 'Light' & laserOn == 0)$pow_theta)
+shapiro.test(subset(urethane.theta.fit.df, state == 'Light' & laserOn == 1)$pow_theta)
 
-wilcox.test(pow_theta ~ laserOn, fit.psd.df, subset = state == 'Scopolamine', paired=TRUE)
-shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 0)$pow_theta)
-shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 1)$pow_theta)
+wilcox.test(pow_theta ~ laserOn, urethane.theta.fit.df, subset = (state == 'Scopolamine'), paired=TRUE)
+shapiro.test(subset(urethane.theta.fit.df, state == 'Scopolamine' & laserOn == 0)$pow_theta)
+shapiro.test(subset(urethane.theta.fit.df, state == 'Scopolamine' & laserOn == 1)$pow_theta)
+plot.samples(urethane.theta.fit.df, pow_theta) + ylab('Theta relative power')
 ```
 ## Aperiodic Background
 
 ```{r}
 var = quo(background_auc)
 g.bac.auc = fit.psd.df %>%
-  filter(stage_desc != 'after_stim') %>%
+  filter(stage_desc != 'after_stim', channelLocation == 'CA1') %>%
   ggplot(aes(x=laserOn, y=!!var, group=trial_id)) +
   geom_line() +
   facet_grid(. ~ state) +
@@ -155,8 +158,10 @@ shapiro.test(subset(fit.psd.df, state == 'Scopolamine' & laserOn == 1)$backgroun
 
 ## Fit slow gamma
 ```{r}
-fit.psd.df = fit.background.df(filter(psd.molten, stage_desc != 'after_stim'), 
-                               freq.bands.df, c(8, 40), 
+fit.psd.df = fit.background.df(filter(psd.molten, stage_desc != 'after_stim', channelLocation == 'CA1'), 
+                               freq.bands.df, 
+                               #c(8, 40),
+                               c(8, 45), 
                                fit.knee = FALSE, show.fit=TRUE, extra.group.vars = c('state'))
 fit.psd.df$laserOn = as.factor(fit.psd.df$laserOn)
 
@@ -168,7 +173,7 @@ fit.psd.df = fit.psd.df %>%
 ```{r}
 var = quo(pow_slow_gamma)
 g.sgamma.power = fit.psd.df %>%
-  filter(stage_desc != 'after_stim') %>%
+  filter(stage_desc != 'after_stim', channelLocation == 'CA1') %>%
   ggplot(aes(x=laserOn, y=!!var, group=trial_id)) +
   geom_line() +
   facet_grid(. ~ state) +

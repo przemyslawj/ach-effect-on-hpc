@@ -1,11 +1,12 @@
 %% setup results
-ripple_std_thr = 6;
+ripple_std_thr = 7;
+min_swr_peak_hz = 140;
 use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
 is_after_ymaze = 0;
-is_baseline = 0;
-is_ymaze_trial = 1;
+is_baseline = 1;
+is_ymaze_trial = 0;
 
 secondOffset = 0;
 
@@ -13,7 +14,7 @@ channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 channels_file_gfp = '/mnt/DATA/chat_ripples/channel_desc/channels_gfp.csv';    
 if is_ymaze_trial
     datarootdir = '/mnt/DATA/chat_ripples/y-maze';
-    channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
+    %channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
     secondOffset = 3;
 end
 if is_baseline
@@ -21,15 +22,19 @@ if is_baseline
 end
 if is_urethane
     datarootdir = '/mnt/DATA/chat_ripples/urethane';
+    channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_urethane.csv';
 end
 
-trials_fpath = [datarootdir filesep 'trials_new.csv'];
+trials_fpath = [datarootdir filesep 'trials.csv'];
 if is_after_ymaze
     trials_fpath = [datarootdir filesep 'trials_after.csv'];
 end
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-expstable = expstable(strcmp(expstable.exp, 'main-effect' ) == 0, :);
+expstable = expstable(strcmp(expstable.exp, 'gfp-control' ) == 1, :);
+%expstable = expstable(strcmp(expstable.animal, 'OS' ) == 1, :);
+%expstable = expstable(expstable.learning_day == 5, :);
+%expstable = expstable(expstable.trial == 4, :);
 
 nexp = size(expstable, 1);
 result_table = table();
@@ -57,9 +62,8 @@ for i = 1:nexp
     fprintf('Processing file for date=%s file=%s\n', dateddir, binfile.name);
     meta = ReadMeta(binfile.name, binfile.folder);
     reversed_channel_map = 0;
-    if ismember('reverse_channel_map', expstable.Properties.VariableNames) &&...
-            (expstable.reverse_channel_map(i) == 1)
-        reversed_channel_map = 1;
+    if ismember('reverse_channel_map', expstable.Properties.VariableNames)
+        reversed_channel_map = expstable.reverse_channel_map(i);
     end
     trial_channels_file = channels_file;
     if strcmp(exp_name, 'main-effect') == 0
@@ -103,7 +107,7 @@ for i = 1:nexp
         else
             if is_urethane
                 trialPeriods = extractTrialPeriodsFromLaser(-dataArray + 10,...
-                   laserChannelIdx, fs, 5.15);
+                   laserChannelIdx, fs, 100);
             end
         end
 
@@ -247,11 +251,16 @@ for i = 1:nexp
             result_table.nripples(entry_i) = size(section_ripples,1);
             result_table.stage_dur_sec(entry_i) = sec_length;
             result_table.noise_dur_sec(entry_i) = length(setdiff(period_start:period_end, keep_sample)) / fs;
-            result_table.swr_incidence(entry_i) = size(section_ripples,1) / sec_length;
+            noiseless_dur_sec = sec_length - result_table.noise_dur_sec(entry_i);
+            result_table.ripple_incidence(entry_i) = size(section_ripples,1) / max(noiseless_dur_sec, 1.0);
+            result_table.swr_incidence(entry_i) = 0;
+            result_table.fast_gamma_incidence(entry_i) = 0;
             result_table.ripple_peakpow(entry_i) = -1;
             result_table.ripple_dur(entry_i) = -1;
             result_table.ripple_freq(entry_i) = -1;
             if ~isempty(section_ripples)
+               result_table.swr_incidence(entry_i) = sum(section_ripples(:,end) >= min_swr_peak_hz) / max(noiseless_dur_sec, 1.0);
+               result_table.fast_gamma_incidence(entry_i) = sum(section_ripples(:,end) < min_swr_peak_hz) / max(noiseless_dur_sec, 1.0);
                result_table.has_ripples(entry_i) = 1;
                result_table.ripple_peakpow(entry_i) = mean(section_ripples(:,4));
                result_table.ripple_dur(entry_i) = mean(section_ripples(:,3) - section_ripples(:,1));
@@ -300,7 +309,7 @@ if ~selected_channels_only
 end
 
 %filename_infix = [filename_infix '_single_std'];
-outdir = [datarootdir filesep 'trial_results_new'];
+outdir = [datarootdir filesep 'trial_results_gfp'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
 writetable(result_table, [outdir filesep 'welch_psd_table' outfile_suffix]);
 writetable(all_ripples, [outdir filesep 'ripples' outfile_suffix]);

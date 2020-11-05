@@ -5,6 +5,8 @@ output:
     df_print: paged
 ---
 
+Script run after ymaze_ripples.Rmd
+
 ```{r include=FALSE}
 knitr::opts_chunk$set(include=TRUE, collapse=TRUE, warning=FALSE, echo=FALSE)
 ```
@@ -29,6 +31,7 @@ source('psd_fitting.R')
 img_dir = '/home/prez/tmp/ymaze_chat_x_ai32/img_gen/ymaze'
 data_dir =  '/mnt/DATA/chat_ripples/y-maze'
 diode.signal = TRUE
+min.stim.stage.dur.sec = 10
 
 trial.info.df = read_csv(paste(data_dir, 'trials.csv', sep='/')) %>%
   dplyr::mutate(file_name=paste0('signal/', animal, '_trial_', trial, '_g0'))
@@ -37,22 +40,29 @@ trial.info.df$date = as.Date(trial.info.df$date, '%d/%m/%Y')
 freq.bands.df = data.frame(
   band=c('theta', 'slow gamma'),
   xmin=c(5, 25),
-  xmax=c(9, 45)
+  #xmax=c(9, 45)
+  xmax=c(12,45)
 )
 ```
 
 Load z-scored Morlet PSD estimate data for the task stage effects
 ```{r}
 if (diode.signal) {
-  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'morlet_psd_table_diode_th6.csv', sep='/'))
+  input.filename = 'morlet_psd_table_diode_th7.csv'
 } else {
-  psddf.ymaze = read_csv(paste(data_dir,'trial_results', 'morlet_psd_table_th6.csv', sep='/'))  
+  input.filename = 'morlet_psd_table_th7.csv'
 }
+
+psddf.ymaze = bind_rows(
+  read_csv(file.path(data_dir, 'trial_results', input.filename)) %>% dplyr::mutate(exp='main-effect'),
+  read_csv(file.path(data_dir, 'trial_results_gfp', input.filename)) %>% dplyr::mutate(exp='gfp-control'))
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
-                        by=c('date', 'animal', 'file_name'))
+                        by=c('date', 'animal', 'file_name', 'exp')) %>%
+  dplyr::mutate(exp_animal = paste(exp, animal, sep='_'))
+
 band.zscore = melt.freq.bands(filter(psddf.ymaze, correct==1), 
-                             extra.id.vars=c('learning_day', 'dirname'),
+                             extra.id.vars=c('learning_day', 'dirname', 'exp', 'exp_animal'),
                              psd.vars.prefix='all_psd_z_',
                              freq.bands = c(exp(seq(0.1, 5.6, by=0.07)))) %>%
   dplyr::rename(band.zscore=band_power)
@@ -61,15 +71,24 @@ band.zscore = melt.freq.bands(filter(psddf.ymaze, correct==1),
 Load Welch's PSD estimate data
 ```{r}
 if (diode.signal) {
-  psddf.ymaze = read_csv(paste(data_dir, 'trial_results', 'welch_psd_table_diode_th6.csv', sep='/'))
+  input.filename = 'welch_psd_table_diode_th7.csv'
 } else {
-  psddf.ymaze = read_csv(paste(data_dir,'trial_results', 'welch_psd_table_th6.csv', sep='/'))  
+  input.filename = 'welch_psd_table_th7.csv'
 }
+psddf.ymaze = bind_rows(
+  read_csv(file.path(data_dir, 'trial_results', input.filename)) %>% dplyr::mutate(exp='main-effect'),
+  read_csv(file.path(data_dir, 'trial_results_gfp', input.filename))  %>% dplyr::mutate(exp='gfp-control'))
+
 psddf.ymaze = prepare.ymaze.df(psddf.ymaze)
 psddf.ymaze = left_join(psddf.ymaze, dplyr::select(trial.info.df, -trial, -state, -laserOn), 
-                        by=c('date', 'animal', 'file_name'))
+                        by=c('date', 'animal', 'file_name', 'exp')) %>%
+  dplyr::mutate(exp_animal = paste(exp, animal, sep='_'))
+#psddf.ymaze = filter(psddf.ymaze, channelLocation == 'CA1')
+
+psddf.ymaze = filter(psddf.ymaze, !(exp_animal %in% excluded.swr.exp_animals))
+
 psd.molten = melt.freq.bands(filter(psddf.ymaze, correct==1), 
-                             extra.id.vars=c('learning_day', 'dirname'),
+                             extra.id.vars=c('learning_day', 'dirname', 'exp', 'exp_animal', 'noise_dur_sec', 'stage_dur_sec'),
                              psd.vars.prefix='all_psd_xx_')
 ```
 
@@ -83,7 +102,7 @@ axis.labels[19]=100
 
 band.zscore %>%
   filter(laserOn == 0) %>%
-  #filter(animal == 'BS') %>%
+  filter(animal == 'BS') %>%
   filter(learning_day == 6)  %>%
   filter(stage_desc %in% c('MazeStem', 'DuringStim')) %>%
   #filter(stage_desc %in% c('DuringStim')) %>%
@@ -98,15 +117,17 @@ band.zscore %>%
 
 ```{r}
 animal.band.zscore = band.zscore %>%
-  #filter(learning_day >= 5)  %>%
-  group_by(animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  filter(stage_desc %in% c('MazeStem', 'DuringStim')) %>%
+  filter(learning_day == 6)  %>%
+  group_by(animal, exp, exp_animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.zscore = mean(band.zscore),
                    sem.zscore = sem(band.zscore))
 
 g.stage.band.zscore = animal.band.zscore %>%
   filter(laserOn == 0) %>%
+  filter(exp=='main-effect', channelLocation == 'CA1') %>%
+  #filter(animal == 'BS') %>%
   filter(animal == 'BS') %>%
-  filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
   ggplot(aes(x=band_start_freq, y=mean.zscore, group=stage_desc)) +
   geom_line(aes(color=stage_desc), size=1*px2pt) +
   geom_ribbon(aes(ymin=mean.zscore - sem.zscore, ymax=mean.zscore + sem.zscore), alpha=0.2) +
@@ -114,7 +135,7 @@ g.stage.band.zscore = animal.band.zscore %>%
   gtheme +
   coord_flip() +
   facet_grid(laserOn ~ channelLocation) +
-  ylim(-1, 1.75) +
+  #ylim(-1, 1.75) +
   #ylim(-1, 1.8) +
   xlab('Frequency (Hz)') +
   ylab('Power z-score') 
@@ -130,7 +151,7 @@ ggsave(paste0(img_dir, '/psd_zscore_giht.pdf'), units = 'cm',
 # Effect of the stage on PSD
 ```{r}
 animal.psd = psd.molten %>%
-  group_by(animal, learning_day, channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  group_by(animal, exp, exp_animal, learning_day, channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(mean.power = mean(log(band_power)),
                    sem.power = sem(log(band_power)))
 ```
@@ -139,11 +160,11 @@ animal.psd = psd.molten %>%
 animal.psd %>%
   filter(laserOn == 0) %>%
   filter(learning_day==6) %>%
-  filter(stage_desc %in% c('MazeStem', 'GoalZone20sec')) %>%
+  filter(stage_desc %in% c('MazeStem', 'DuringStim')) %>%
   ggplot(aes(x=band_start_freq, y=mean.power, group=stage_desc)) +
   geom_line(aes(color=stage_desc), size=2*px2pt) +
   geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power), alpha=0.2) +
-  facet_grid(animal ~ channelLocation) +
+  facet_grid(exp + animal ~ channelLocation) +
   scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
   geom_hline(yintercept = 0.0, linetype='dashed') +
   gtheme +
@@ -156,136 +177,130 @@ animal.psd %>%
 animals.psd = psd.molten %>%
   #filter(learning_day >= 5)  %>%
   #filter(animal == 'OS') %>%
-  filter(stage_desc %in% c('GoalZone20sec')) %>%
-  group_by(animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
+  filter(stage_desc %in% c('DuringStim')) %>%
+  group_by(exp, animal, exp_animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(sem.power = sem(log(band_power)),
                    band_power = mean(log(band_power)))
 ```
 
 
 ```{r include=FALSE}
-joined.psd.fit.df = map_dfr(unique(animals.psd$animal), ~ {
-  animal.psd = filter(animals.psd, animal == .x)
+joined.psd.fit.df = map_dfr(unique(animals.psd$exp_animal), ~ {
+  animal.psd = filter(animals.psd, exp_animal == .x)
   animal.psd$name = 'model'
-  animal.fit.low.freq = calc.animal.band.fit.df(animal.psd, c(2, 19)) %>%
-    dplyr::mutate(animal = .x, name = paste(name, 'low_freq', sep='_'))
+  animal.fit.low.freq = calc.animal.band.fit.df(animal.psd, c(2.5, 15)) %>%
+    dplyr::mutate(animal = animal.psd$animal[1], exp = animal.psd$exp[1], name = paste(name, 'low_freq', sep='_'))
   animal.fit.high.freq = calc.animal.band.fit.df(animal.psd, c(15, 150)) %>%
-    dplyr::mutate(animal = .x, name = paste(name, 'high_freq', sep='_'))
+    dplyr::mutate(animal = animal.psd$animal[1], exp = animal.psd$exp[1], name = paste(name, 'high_freq', sep='_'))
   bind_rows(animal.psd, animal.fit.low.freq, animal.fit.high.freq)
 })
 ```
 
 ```{r}
-joined.psd.fit.df %>%
-  #filter(animal == 'OS') %>%
-  dplyr::mutate(name_laser=paste(name, laserOn, sep='_')) %>%
+ca1.psd.fit.df = filter(joined.psd.fit.df, channelLocation != 'CA3') %>%
+  dplyr::mutate(name_laser=paste(name, laserOn, sep='_'))
+ca1.psd.fit.df %>%
   ggplot() +
-  geom_line(aes(x=band_start_freq, y=band_power, 
-                group=name_laser, color=laserOn, linetype=name)) +
   geom_ribbon(aes(x=band_start_freq, y=band_power, 
-                  group=name_laser, fill=laserOn,
-                  ymin=band_power - sem.power, ymax=band_power + sem.power), 
-              alpha=0.2) +
+              group=name_laser, fill=laserOn,
+              ymin=band_power - sem.power, ymax=band_power + sem.power), 
+          alpha=0.8) +
+  geom_line(data=filter(ca1.psd.fit.df, name != 'model'), aes(x=band_start_freq, y=band_power, 
+              group=name_laser, color=laserOn, linetype=name)) +
   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
             ymin=-20, ymax=-5, alpha=0.05, fill='grey10') +
-  #facet_grid(animal ~ channelLocation, scales = 'free') +
-  facet_wrap(animal ~ channelLocation, scales = 'free', ncol = 4) +
+  facet_wrap(exp + animal ~ ., scales = 'free', ncol = 4) +
   scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
   gtheme +
-  theme(legend.position = 'none') +
-  #scale_y_continuous(breaks=c(-15,-10), limits = c(-18, -7.0))+
+  #theme(legend.position = 'none') +
   scale_linetype_manual(values=c('dashed', 'dashed', 'solid')) +
   xlab('Frequency (Hz)') + ylab('Log power')
 
-#ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean.pdf'), 
-#       width=10, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
- 
 ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean_all.pdf'), 
        width=15, height=9, unit='cm', dpi=300, device=cairo_pdf)
 ```
-Overall PSD
-```{r}
-all.psd = psd.molten %>%
-  group_by(channelLocation, laserOn, stage_desc, band_start_freq) %>%
-  dplyr::summarise(mean.power = mean(log(band_power)),
-                   sem.power = sem(log(band_power)))
-
-all.psd %>%
-  filter(stage_desc %in% c('GoalZone20sec')) %>%
-  ggplot(aes(x=band_start_freq, y=mean.power, group=laserOn)) +
-  geom_line(aes(color=laserOn), size=1*px2pt) +
-  geom_ribbon(aes(ymin=mean.power - sem.power, ymax=mean.power + sem.power, fill=laserOn), alpha=0.15) +
-  facet_grid(. ~ channelLocation) +
-  scale_x_log10(limits=c(2,250), breaks=axis.breaks, labels=axis.labels) +
-  scale_color_manual(labels=c('off', 'on'), values=c(nolaser.col, laser.col)) +
-  scale_fill_manual(labels=c('off', 'on'), values=c(nolaser.col, laser.col)) +
-  gtheme +
-  labs(fill='', color='') +
-  xlab('Frequency (Hz)') + ylab('Log power')
-
-ggsave(paste0(img_dir, '/psd_diff.pdf'), units = 'cm',
-       dpi=300, device=cairo_pdf,
-       height=5, width=10)
-```
-
 
 # PSD fit
 Fit background with FOOOF and check quality
 ```{r}
-fit.psd.df = fit.background.df(
+fit.psd.ymaze.high = fit.background.df(
   filter(psd.molten,
-         #learning_day >= 5, 
-         stage_desc == 'GoalZone20sec'),
+         stage_desc == 'DuringStim',
+         stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec),
   freq.bands.df,
   freq.range = c(15, 150),
-  fit.knee = FALSE)
+  fit.knee = FALSE,
+  extra.group.vars = c('exp_animal'))
 
-summary(fit.psd.df$fit_error)
+summary(fit.psd.ymaze.high$fit_error)
+fit.psd.ymaze.high$correct = 1
 ```
 
 ```{r}
-g.bac.auc = plot.laser.change(fit.psd.df, background_auc) + ylab('Background spectrum AUC')
+plot.laser.change(fit.psd.ymaze.high, background_auc) + ylab('Background spectrum AUC')
+ca1.bac.df = filter(fit.psd.ymaze.high, channelLocation == 'CA1') 
+bac.auc.model = calc.laser.fixed.effects(
+  ca1.bac.df, 
+  background_auc)
+
+g.bac.auc = plot.samples(ca1.bac.df, background_auc) + 
+  ylab('AUC')
 g.bac.auc
-calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA1'), background_auc)
-calc.laser.fixed.effects(subset(fit.psd.df, channelLocation == 'CA3'), background_auc)
 ```
 
 
 ## Slow gamma
 ```{r}
 var = quo(pow_slow_gamma)
-fit.sgamma.present = filter(fit.psd.df) %>%
+
+pct.sgamma.oscillating = group_by(fit.psd.ymaze.high, channelLocation, exp, animal, exp_animal, laserOn) %>%
+  dplyr::summarise(pct.oscillating=sum(!is.na(!!var)) / n(), n())
+group_by(pct.sgamma.oscillating, channelLocation, laserOn) %>% dplyr::summarise(mean(pct.oscillating), sem(pct.oscillating))
+
+fit.sgamma.present = filter(fit.psd.ymaze.high) %>%
   dplyr::filter(!is.na(!!var))
 
-group_by(fit.sgamma.present, laserOn) %>%
-  dplyr::summarise(mean(!!var), sem(!!var))
+group_by(fit.sgamma.present, channelLocation, exp, laserOn) %>%
+  dplyr::summarise(mean(!!var), sem(!!var), n())
 
-g.sgamma.pow = plot.laser.change(fit.sgamma.present, !!var) + ylab('Relative Slow Gamma Power (20 - 45 Hz; a.u.)') + ylim(c(0, 0.59))
+plot.laser.change(fit.sgamma.present, !!var) + ylab('Relative Slow Gamma Power (20 - 45 Hz)')
+sgamma.model = calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var)
+g.sgamma.pow = plot.samples(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var) +
+  ylab('Relative Slow Gamma Power (20 - 45 Hz; a.u.)')
 g.sgamma.pow
-calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA3'), !!var)
+
+# Significant not increase in CA3 or CA1 slow gamma when ignoring gfp mice
+#calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), pow_slow_gamma,
+#                         fixed.effects.str = 'laserOn', random.effects.str = '(1 + laserOn | animal)')
 ```
 
 
 ## Theta
 Fit background with FOOOF and check quality
 ```{r}
-fit.psd.df = fit.background.df(
+fit.psd.ymaze.low = fit.background.df(
   filter(psd.molten,
-         #learning_day >= 5, 
-         stage_desc == 'GoalZone20sec'),
+         #exp=='gfp-control', channelLocation == 'CA1',
+         stage_desc == 'DuringStim',
+         stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec),
   freq.bands.df,
-  freq.range = c(2, 20),
-  fit.knee = FALSE)
+  #show.fit=TRUE,
+  #freq.range = c(2, 20),
+  freq.range = c(3.5, 15),
+  fit.knee = FALSE,
+  extra.group.vars = c('exp_animal'))
 
-summary(fit.psd.df$fit_error)
+summary(fit.psd.ymaze.low$fit_error)
+summary(fit.psd.ymaze.low$r_squared)
+fit.psd.ymaze.low$correct = 1
 ```
 
 Count of trials with theta:
 ```{r}
 var = quo(pow_theta)
-pct.theta.oscillating = group_by(fit.psd.df, channelLocation, animal, laserOn) %>%
+pct.theta.oscillating = group_by(fit.psd.ymaze.low, channelLocation, exp, animal, exp_animal, laserOn) %>%
   dplyr::summarise(pct.oscillating=sum(!is.na(!!var)) / n())
 pct.theta.oscillating
 ca.subset = subset(pct.theta.oscillating, channelLocation == 'CA1')
@@ -298,10 +313,17 @@ group_by(pct.theta.oscillating, channelLocation, laserOn) %>% dplyr::summarise(m
 Change in pow theta.
 ```{r}
 var = quo(pow_theta)
-fit.theta.present = filter(fit.psd.df) %>%
-  dplyr::filter(!is.na(!!var))
-g.theta.pow = plot.laser.change(fit.psd.df, !!var) + ylab('Relative Theta Power (5 - 11 Hz; a.u.)')
-calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), !!var)
+fit.theta.present = filter(fit.psd.ymaze.low) %>%
+  dplyr::filter(!is.na(!!var)) 
+
+plot.laser.change(fit.theta.present, !!var) + ylab('Relative Theta Power (5 - 12 Hz)')
+
+group_by(fit.theta.present, channelLocation, exp, laserOn) %>%
+  dplyr::summarise(mean(!!var), sem(!!var))
+
+m.full = calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), pow_theta)
+g.theta.pow = plot.samples(subset(fit.theta.present, channelLocation == 'CA1'), pow_theta) +
+  ylab('Relative theta power (5 - 12 Hz)')
 g.theta.pow
 ```
 
@@ -310,10 +332,52 @@ g.theta.pow
 ```{r}
 plot_grid(g.bac.auc, g.theta.pow, g.sgamma.pow, ncol=3)
 ggsave(file=paste0(img_dir, '/', '5_psd_stats.pdf'), 
-       width=12, height=5, unit='cm', dpi=300, device=cairo_pdf)
+       width=12.2, height=5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
+Theta already higher during the ymaze than during stim in sleep
+```{r}
+theta.fit.df = bind_rows(
+  filter(mutate(fit.psd.df.low, sleep=TRUE), laserOn == 1), 
+  filter(mutate(fit.psd.ymaze.low, sleep=FALSE), laserOn == 0)) %>%
+  filter(!is.na(pow_theta)) %>%
+  filter(exp == 'main-effect') %>%
+  filter(channelLocation == 'CA1')
 
+ggplot(theta.fit.df) +
+  geom_jitter(aes(x=laserOn, y=pow_theta, color=animal), shape=1, height=0, width=0.3) +
+  facet_grid(. ~ exp + sleep)
+
+theta.state.model = calc.laser.fixed.effects(theta.fit.df, pow_theta,
+                         fixed.effects.str = 'sleep',
+                         random.effects.str = '(1 | animal)', 
+                         print.mean.stats=FALSE)
+
+group_by(theta.fit.df, channelLocation, exp, sleep) %>% 
+  dplyr::summarise(mean(pow_theta), sem(pow_theta), n()) 
+```
+
+Slow gamma already higher during the ymaze than during stim in sleep
+```{r}
+sgamma.fit.df = bind_rows(
+  filter(mutate(fit.psd.df.high, sleep=TRUE), laserOn == 1), 
+  filter(mutate(fit.psd.ymaze.high, sleep=FALSE), laserOn == 0)) %>%
+  filter(!is.na(pow_slow_gamma)) %>%
+  filter(exp == 'main-effect') %>%
+  filter(channelLocation == 'CA1')
+
+ggplot(sgamma.fit.df) +
+  geom_jitter(aes(x=laserOn, y=pow_slow_gamma, color=animal), shape=1, height=0, width=0.3) +
+  facet_grid(. ~ exp + sleep)
+
+sgamma.state.model = calc.laser.fixed.effects(sgamma.fit.df, pow_slow_gamma,
+                         fixed.effects.str = 'sleep',
+                         random.effects.str = '(1 | animal)',
+                         print.mean.stats=FALSE)
+
+group_by(sgamma.fit.df, channelLocation, exp, sleep) %>% 
+  dplyr::summarise(mean(pow_slow_gamma), sem(pow_slow_gamma), n()) 
+```
 # Coherence
 # ```{r}
 # wcoh.df = read_csv(paste(data_dir, 'trial_results', 'ripple_coherence_table_diode.csv', sep='/'))

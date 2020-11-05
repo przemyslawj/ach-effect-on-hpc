@@ -1,5 +1,5 @@
 %% setup results
-ripple_std_thr = 6;
+ripple_std_thr = 7;
 use_diode = 1;
 selected_channels_only = 1;
 is_urethane = 0;
@@ -23,11 +23,8 @@ end
 trials_fpath = [datarootdir filesep 'trials.csv'];
 expstable = readtable(trials_fpath, 'ReadVariableNames', true);
 expstable.dirname = strtrim(expstable.dirname);
-reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_ymaze.csv';
-if is_baseline
-    reverse_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels_reversed_baseline.csv';
-end
-ord_channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
+expstable = expstable(strcmp(expstable.exp, 'main-effect' ) == 1, :);
+channels_file = '/mnt/DATA/chat_ripples/channel_desc/channels.csv';
 
 nexp = size(expstable, 1);
 result_table = table();
@@ -53,12 +50,9 @@ for i = 1:nexp
     end
     fprintf('Processing file for date=%s file=%s\n', dateddir, binfile.name);
     meta = ReadMeta(binfile.name, binfile.folder);
-    channels_file = reverse_channels_file;
     reversed_channel_map = 0;
-    if ismember('reverse_channel_map', expstable.Properties.VariableNames) &&...
-            (expstable.reverse_channel_map(i) == 0)
-        channels_file = ord_channels_file;
-        reversed_channel_map = 1;
+    if ismember('reverse_channel_map', expstable.Properties.VariableNames)
+        reversed_channel_map = expstable.reverse_channel_map(i);
     end
     channelTable = readChannelTable(...
         channels_file, animal_code, meta, reversed_channel_map, selected_channels_only, use_diode);
@@ -152,13 +146,6 @@ for i = 1:nexp
                 strcmp(channelTable.location{channel}, 'EMG')
             continue
         end
-        % remove epochs with jumps in the signal
-        channel_keep_sample = excludeEMGNoisePeriods(dataArray(channel,:), fs * 0.5);
-        keep_sample = intersect(channel_keep_sample, keep_sample);
-
-        if numel(keep_sample_fewer) < 2
-            keep_sample_fewer = keep_sample;
-        end
 
         [cws, freqs] = cwt(dataArray(channel,:), 'amor', fs);
         signal_pxx = abs(cws .^ 2);
@@ -230,7 +217,7 @@ end
 %filename_infix = [filename_infix '_single_std'];
 outfile_suffix = [filename_infix '_th' num2str(ripple_std_thr) '.csv'];
 outdir = [datarootdir filesep 'trial_results'];
-writetable(result_table, [datarootdir filesep 'morlet_psd_table' outfile_suffix]);
+writetable(result_table, [outdir filesep 'morlet_psd_table' outfile_suffix]);
 
 function [ pow ] = TotalBandPower(f1, pxx, band)
     %pow = sum(10 * log10(pxx(f1 >= band(1) & f1 <= band(2))));

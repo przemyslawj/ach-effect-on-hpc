@@ -46,6 +46,7 @@ calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80),
   }
   res$background_auc = trapz(log10(fm$freqs), fm[['_bg_fit']])
   res$fit_error = fm$error_
+  res$r_squared = fm$r_squared_
   #y = 10^offset * (1/(knee + x^exp))
   if (show.fit) {
     fm$print_results()
@@ -145,18 +146,18 @@ fm2df = function(fm, channelLocation, laserOn) {
   df
 }
 
-calc.animal.band.fit.df = function(animal.psd, freq.range = c(1, 120)) {
-  bs.ca1.psd = filter(animal.psd, channelLocation == 'CA1') %>%
+calc.animal.band.fit.df = function(animal.psd, freq.range = c(1, 150), fit.knee = FALSE) {
+  ca1.psd = filter(animal.psd, channelLocation == 'CA1') %>%
     dplyr::mutate(band_power = exp(band_power) ** log(10))
-  bs.ca1.fit.1 = fm2df(calc.bands.pow(subset(bs.ca1.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA1', 1)
-  bs.ca1.fit.0 = fm2df(calc.bands.pow(subset(bs.ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA1', 0)
+  ca1.fit.1 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA1', 1)
+  ca1.fit.0 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA1', 0)
   
-  bs.ca3.psd = filter(animal.psd, channelLocation == 'CA3') %>%
+  ca3.psd = filter(animal.psd, channelLocation == 'CA3') %>%
     dplyr::mutate(band_power = exp(band_power) ** log(10))
-  bs.ca3.fit.1 = fm2df(calc.bands.pow(subset(bs.ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA3', 1)
-  bs.ca3.fit.0 = fm2df(calc.bands.pow(subset(bs.ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = FALSE)$fm, 'CA3', 0)
+  ca3.fit.1 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA3', 1)
+  ca3.fit.0 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA3', 0)
   
-  bs.fit = bind_rows(bs.ca1.fit.0, bs.ca1.fit.1, bs.ca3.fit.0, bs.ca3.fit.1)
-  bs.fit$laserOn = as.factor(bs.fit$laserOn)
-  bs.fit
+  fit.df = bind_rows(ca1.fit.0, ca1.fit.1, ca3.fit.0, ca3.fit.1)
+  fit.df$laserOn = as.factor(fit.df$laserOn)
+  fit.df
 }

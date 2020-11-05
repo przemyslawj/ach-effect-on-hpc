@@ -2,7 +2,7 @@ max_recording_ripples = 100;
 
 datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 secondOffset = 0;
-is_ymaze_trial = 1;
+is_ymaze_trial = 0;
 is_after_ymaze = 0;
 
 diode_ripples = 1;
@@ -18,17 +18,17 @@ if ~is_ymaze_trial
 end
 
 use_diode = 1;
-ripples_filename = 'ripples_diode_th6.csv';
+ripples_filename = 'ripples_diode_th7.csv';
 
-ripplestable = readtable([datarootdir filesep 'trial_results_merged' filesep ripples_filename]);
+ripplestable = readtable([datarootdir filesep 'trial_results' filesep ripples_filename]);
 if is_ymaze_trial
     secondOffset = 3;
     ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
 end
-ripplestable = ripplestable(strcmp(ripplestable.exp, 'main-effect' ) == 1, :);
-%ripplestable = ripplestable(strcmp(ripplestable.animal, 'OS'),:);
+ripplestable = ripplestable(strcmp(ripplestable.exp, 'gfp-control' ) == 1, :);
+%ripplestable = ripplestable(strcmp(ripplestable.animal, 'GD') == 1,:);
 
-trials_fpath = [datarootdir filesep 'trials_merged.csv'];
+trials_fpath = [datarootdir filesep 'trials.csv'];
 if is_after_ymaze
     trials_fpath = [datarootdir filesep 'trials_after.csv'];
 end
@@ -170,7 +170,7 @@ for gi = 1:max(g)
 
 
         if save_plots
-            fig_dir = fullfile(datarootdir, 'swrs_merged', animal_code);
+            fig_dir = fullfile(datarootdir, 'swrs_gfp', animal_code);
             if ~isfile(fig_dir)
                 mkdir(fig_dir);
             end

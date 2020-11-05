@@ -18,10 +18,12 @@ source('plotting_params.R')
 ```{r include=FALSE}
 data_dir =  '/mnt/DATA/chat_ripples/baseline'
 if (diode.signal) {
-  input.filename = 'ripples_diode_th6.csv'
+  input.filename = 'ripples_diode_th7.csv'
 } else {
-  input.filename = 'ripples_th6.csv'
+  input.filename = 'ripples_th7.csv'
 }
+
+min.swr.freq = 140
 ripple.df = bind_rows(
   read_csv(file.path(data_dir, 'trial_results', input.filename)),
   read_csv(file.path(data_dir, 'trial_results_gfp', input.filename)))
@@ -29,7 +31,8 @@ ripple.df = bind_rows(
 ripple.df = ripple.df %>%
   replace_na(list(exp = 'main-effect')) %>%
   dplyr::mutate(trial_id = paste(date, animal, trial, sep='_'),
-                exp_animal = paste(exp, animal, sep='_'))
+                exp_animal = paste(exp, animal, sep='_'),
+                is.swr=peak_freq >= min.swr.freq)
 
 psddf$exp = as.factor(psddf$exp)
 psddf$exp_animal = as.factor(psddf$exp_animal)
@@ -57,22 +60,13 @@ ripple.df %>%
   facet_grid(exp + animal ~ channelLocation, scales =  'free_y')
 ```
 
-The detected events have their frequency peak around ~120Hz as expected in CA3.
-
-```{r include=TRUE}
-ripple.df %>%
-  filter(exp == 'main-effect') %>%
-  ggplot() +
-  geom_histogram(aes(x=peak_freq, color=laserOn), fill='white', alpha=0.4) +
-  scale_x_continuous(breaks=c(100, 120, 140, 160, 180, 200))
-```
 
 ripple stats during control
 ```{r}
 metric_name = 'peak_freq'
 #metric_name = 'ripple_dur'
 
-filter(ripple.df, !is.na(peak_freq), exp == 'main-effect')[,metric_name] %>% 
+filter(ripple.df, !is.na(peak_freq), exp == 'main-effect', laserOn==0, channelLocation == 'CA1')[,metric_name] %>% 
   pull-> ripple_freqs
 
 summary(ripple_freqs)
@@ -83,99 +77,79 @@ sem(ripple_freqs)
 CA1
 ```{r}
 ca1.psddf = filter(psddf, channelLocation == 'CA1', stage_desc != 'after_stim')
-m.full = lmerTest::lmer(swr_incidence ~ laserOn + exp + laserOn * exp + (1 + laserOn | exp_animal), 
-                        data=ca1.psddf, REML = TRUE) 
-plot.model.diagnostics(m.full, ca1.psddf$animal, ca1.psddf$laserOn)
-summary(m.full)
-coef(m.full)$animal
-anova(m.full, refit=FALSE, ddf='Satterthwaite')
+m.full = calc.laser.fixed.effects(ca1.psddf, swr_incidence)
+plot.samples(ca1.psddf, swr_incidence) + ylab('Ripple incidence (Hz)')
+pairwise.post.hoc(m.full)
+ggsave(file=paste0(img_dir, '/', '2_sleep_ripples_stats.pdf'), 
+       width=4.5, height=5.0, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
-CA3
+Median change in ripple incidence per animal
 ```{r}
-ca3.psddf = filter(psddf, channelLocation == 'CA3', stage_desc != 'after_stim')
-m.full = lmerTest::lmer(swr_incidence ~ laserOn + exp + laserOn * exp + (1 + laserOn | exp_animal), 
-                        data=ca3.psddf, REML = TRUE) 
-plot.model.diagnostics(m.full, ca3.psddf$animal, ca3.psddf$laserOn)
-summary(m.full)
-coef(m.full)$animal
-anova(m.full, refit=FALSE, ddf='Satterthwaite')
+swr.diff.pct.df = filter(ca1.psddf, stage_desc != 'after_stim') %>%
+  group_by(animal, exp,laserOn, stage_desc) %>% 
+    dplyr::summarise(var.median = median(swr_incidence, na.rm=TRUE)) %>%
+  reshape2::dcast(exp + animal ~ laserOn) %>%
+  dplyr::mutate(diff.pct = (`0` - `1`) / `0` * 100)
+
+swr.diff.pct.df
+filter(swr.diff.pct.df, exp=='main-effect', diff.pct < 100) %>%
+  dplyr::summarise(mean(diff.pct), sem(diff.pct))
+
+swr.diff.pct.df %>%
+  group_by(exp) %>%
+  dplyr::summarise(mean(diff.pct), sem(diff.pct))
 ```
 
-
-
+CA1 ripple durations
 ```{r}
-paired.swr.wilcox = function(psddf.all, var.name, cond.name, paired=TRUE) {
-  Y = psddf.all %>%
-    select(trial_id, ond.name, var.name)
-  paired.swr = unstack(Y, formula(paste0(var.name, ' ~ ', cond.name )))
-  wilcox.test(paired.swr[[1]], paired.swr[[2]], paired=paired, alternative='greater')
-}
+ca1.ripple.df = filter(ripple.df, channelLocation == 'CA1', stage_desc != 'after_stim') 
+m.full = calc.laser.fixed.effects(filter(ca1.ripple.df, peak_freq >= 140), log(ripple_dur))
+
+ggplot(filter(ca1.ripple.df, peak_freq >= 140), aes(x=ripple_dur*1000)) +
+  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), binwidth = 10, alpha=0.5, position='identity') +
+  facet_grid(. ~ exp) +
+  scale_color_manual(values = c(nolaser.col, laser.col)) +
+  scale_fill_manual(values = c(nolaser.col, laser.col)) +
+  gtheme +
+  xlab('Ripple duration (ms)') + ylab('# SWRs')
+
+ggsave(file=file.path(img_dir, '3_ripple_duration.pdf'), 
+       width=9, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
-
-
-Paired comparison of ripple incidence during the same trial shows the effect of laser is less prominent in some of the individual awake mice.
-
-# ```{r include=TRUE}
-# my.paired.plot(paired.psddf.all, 'swr_incidence') +
-#   facet_grid(state ~ .) +
-#   ylab('Ripple incidence (Hz)')
-# ```
-SWR incidence summary
+CA1 ripple peak frequency
 ```{r}
-stage.name = 'stim'
-filter(psddf, stage_desc != 'after_stim') %>%
-  group_by(exp, animal, stage_desc, channelLocation) %>%
-  dplyr::summarise(m.var=mean(swr_incidence)) %>%
-  group_by(exp, stage_desc, channelLocation) %>%
-  dplyr::summarise(mean(m.var), sem(m.var))
+m.full = calc.laser.fixed.effects(ca1.ripple.df, peak_freq)
 
-print('CA1')
-summary(subset(ca1.psddf, stage_desc == stage.name & exp == 'main-effect')$swr_incidence) 
-sem(subset(ca1.psddf, stage_desc == stage.name)$swr_incidence) 
+ggplot(ca1.ripple.df, aes(x=peak_freq)) +
+  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), binwidth = 10, alpha=0.5, position='identity') +
+  facet_grid(. ~ exp) +
+  scale_color_manual(values = c(nolaser.col, laser.col)) +
+  scale_fill_manual(values = c(nolaser.col, laser.col)) +
+  gtheme +
+  xlab('Peak frequency (Hz)') + ylab('# Ripples')
 
-print('CA3')
-summary(subset(ca3.psddf, stage_desc == stage.name & exp == 'main-effect')$swr_incidence) 
-sem(subset(ca3.psddf, stage_desc == stage.name)$swr_incidence) 
+ggsave(file=file.path(img_dir, '3_peak_freq.pdf'), 
+       width=9, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
 ```
-
-
 ```{r}
-# CA3 peak freq
-ca3.ripple.df = filter(ripple.df, channelLocation == 'CA1', stage_desc != 'after_stim')
-m.full = lmerTest::lmer(peak_freq ~ laserOn + exp + laserOn * exp + (1 + laserOn | animal), 
-                        data=ca3.ripple.df, REML = TRUE) 
-plot.model.diagnostics(m.full, ca3.ripple.df$animal, ca3.ripple.df$laserOn)
-summary(m.full)
-coef(m.full)$animal
-anova(m.full, refit=FALSE, ddf='Satterthwaite')
+filter(ca1.ripple.df, laserOn == 0, exp=='main-effect', peak_freq >= 140) %>%
+  pull(peak_freq) -> X
+summary(X)
+sem(X)
 ```
 
-Detected ripples are not shorter during the laser activation
-```{r include=TRUE}
-ripple.df = ripple.df %>%
-  mutate(ripple_dur = end_time-start_sec)
-
-ripple.df %>%
-  filter(exp == 'main-effect') %>%
-  ggplot() +
-  geom_histogram(aes(x=ripple_dur, group=laserOn, col=laserOn, fill=laserOn), alpha=0.5) +
-  xlab('Ripple duration (s)') + ylab('#Ripples')
-
-ripple.df %>%
-  filter(exp == 'main-effect') %>%
-  ggplot() +
-  facet_grid(. ~ channelLocation) +
-  geom_boxplot(aes(x=animal, y=ripple_dur, col=laserOn)) +
-  ylab('Ripple duration (s)') + xlab('Animal')
-
-kruskal.test(ripple_dur~laserOn, data=ripple.df, subset = exp == 'main-effect')
+Ripples vs high-gamma events
+```{r}
+ca1.ripple.df %>%
+  dplyr::group_by(exp, channelLocation, is.swr) %>%
+  dplyr::summarise(n(), mean(peak_freq), median(peak_freq))
 ```
 
 
-Histogram of the ripples over time - the laser active at 20-40 s
 
+Histogram of the ripples over time - the laser active at 30-60 s
 ```{r include=TRUE}
 source('bin_ripples.R')
 
@@ -183,82 +157,26 @@ channel.loc='CA1'
 
 binned.ripple.df = ripple.df %>% 
   filter(channelLocation == channel.loc, exp == 'main-effect') %>%
+  filter(is.swr) %>%
   bin.ripples(bin_dur=5)
 
 incidence.summary = binned.ripple.df %>%
   dplyr::group_by(bin_sec, laserOn) %>%
   dplyr::summarise(mincidence = mean(incidence, na.rm = TRUE),
-                    incidence.sd = sem(incidence))
+                    incidence.sd = sem(incidence), n=n())
 
 g = ggplot(incidence.summary, aes(x=bin_sec, y=mincidence)) +
-  geom_col(fill='white', colour='black', position=position_dodge(width=-2.5)) +
-  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd), width=1.2) +
+  geom_col(fill='white', position=position_dodge(width=-2.5), color='#444444', size=0.5) +
+  geom_errorbar(aes(ymin=mincidence - incidence.sd, ymax=mincidence +incidence.sd), width=1.2, color='#444444') +
   ylab('Ripple\nincidence (Hz)') +
   xlab('Time (s)') +
-  #scale_fill_manual(values = c("grey", "#56B4E9")) +
-  scale_x_continuous(breaks=c(30,60))  +
-  scale_y_continuous(breaks=c(0, 0.2, 0.4)) +
+  #scale_color_manual(values = c("grey", "#56B4E9")) +
+  scale_x_continuous(breaks=c(0, 30, 60, 90))  +
+  #scale_y_continuous(breaks=c(0, 0.2, 0.4)) +
   gtheme +
   theme(legend.position = 'none') 
 
 g
 ggsave(file=paste0(img_dir, '/', '3_ripple_incidence_', channel.loc, '.pdf'), 
-     width=9.3, height=3, unit='cm', dpi=300, device=cairo_pdf)
+     width=8.5, height=3, unit='cm', dpi=300, device=cairo_pdf)
 ```
-
-Decrease in ripples per animal
-```{r}
-swr.baseline.summary = filter(psddf, stage_desc != 'after_stim') %>%
-  group_by(exp, animal, laserOn, stage_desc, state, channelLocation) %>% 
-  dplyr::summarise(swr_incidence.mean=mean(swr_incidence),
-                   swr_incidence.sem=sem(swr_incidence),
-                   has_ripples.pct=sum(swr_incidence > 0) / n(),
-                   nripples.mean = mean(nripples)) 
-
-xlabels = rep(c('off', 'on'), 2)
-
-swr.baseline.summary %>%
-  #dplyr::mutate(date_animal = paste(format(date), animal, sep='_'),
-  #              date_laser_val = as.numeric(date) + (as.numeric(laserOn) - 1) * 0.5 - 0.25) %>% 
-  ggplot() +
-  geom_point(aes(x=laserOn, y=swr_incidence.mean, color=animal)) +
-  geom_line(aes(x=laserOn, y=swr_incidence.mean, group=animal)) +
-  #geom_ribbon(aes(x=laserOn, 
-  #                ymin=swr_incidence.mean - swr_incidence.sem, 
-  #                ymax=swr_incidence.mean + swr_incidence.sem,
-  #                group=animal), 
-  #              alpha=0.1) +
-  xlab('Stimulation') + ylab('Ripple incidence (Hz)') +
-  facet_grid(. ~ channelLocation + exp) +
-  scale_x_discrete(labels=xlabels) +
-  scale_y_continuous(breaks=c(0.0, 0.2, 0.4)) +
-  gtheme
-ggsave(file=paste0(img_dir, '/', '2_sleep_ripples_stats.pdf'), 
-       width=5, height=5, unit='cm', dpi=300, device=cairo_pdf)
-```
-
-```{r}
-psddf %>%
-  filter(exp == 'gfp-control') %>%
-  ggplot(aes(x=laserOn, y=swr_incidence)) +
-  geom_boxplot() +
-  facet_grid(exp + animal ~ channelLocation) + 
-    xlab('Stimulation') + ylab('Ripple incidence (Hz)') +
-  scale_x_discrete(labels=xlabels) +
-  gtheme
-```
-BD ripples over time
-```{r}
-psddf %>%
-  filter(animal == 'BD', stage_desc != 'after_stim') %>%
-  filter(channelLocation == 'CA3') %>%
-  ggplot() +
-  geom_point(aes(x=trial_id, y=swr_incidence, color=laserOn)) +
-  facet_grid(channelLocation ~ .) +
-  gtheme +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ylab('SWR incidence (Hz)') + xlab('Trial id')
-```
-
-
-

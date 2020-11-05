@@ -36,7 +36,7 @@ emgIdx = find(strcmp(channelTable.location, 'EMG'));
 
 keep_sample_fewer = excludeEMGNoisePeriods(dataArray(emgIdx,:), fs * 1);
 %% Plot SWR
-for chan = 1:size(dataArray, 1)  
+for chan = 1:size(dataArray, 1)
     ripple_detection_signal = GetRippleSignal(filtered(chan, :)', fs);
     std_estimate = std(ripple_detection_signal(keep_sample_fewer));
     fprintf('filtered std %.8f\n', std(filtered(chan, keep_sample_fewer)));
@@ -45,16 +45,16 @@ for chan = 1:size(dataArray, 1)
                                  'thresholds', [2 6 0.01],...
                                  'durations', [10 20 300],...
                                  'std', std_estimate);
-    if ~isempty(ripples)                               
+    if ~isempty(ripples)
         ripple_starts = ripples(:,1);
         ripple_ends = ripples(:,3);
     else
         ripple_starts = [];
         ripple_ends = [];
-    end 
+    end
     fprintf('Channel %s: %d ripples\n', channelTable.channel_name{chan}, ...
         length(ripple_starts));
-    
+
     figure('name', sprintf('Channel %s', channelTable.channel_name{chan}),...
            'Position', [100 1000 1100 600]);
     nfigure = length(findobj('type','figure'));
@@ -62,7 +62,7 @@ for chan = 1:size(dataArray, 1)
     plotData(fs, dataArray(chan,:), filtered(chan,:), ...
         ripple_starts, ripple_ends, normalizedSquaredSignal', ...
         0, rec_len_sec);
-    
+
     sliderVars = struct('fs', fs, 'lengthSeconds', lengthSeconds,...
         'data', dataArray(chan,:), 'filtered', filtered(chan,:), ...
         'ripple_starts', ripple_starts, 'ripple_ends', ripple_ends,...
@@ -74,7 +74,7 @@ for chan = 1:size(dataArray, 1)
               'SliderStep', [1 / lengthSeconds / 4 , 10 / lengthSeconds / 4],...
               'Tag', sprintf('timeSlider_%d', nfigure));
     set(sliderHandle,'Callback',{@sliderCallback, sliderVars});
-    
+
     timewindowHandle = uicontrol('Style', 'slider', ...
           'Position', [10 50 100 20],...
           'SliderStep', [0.1, 0.3],...
