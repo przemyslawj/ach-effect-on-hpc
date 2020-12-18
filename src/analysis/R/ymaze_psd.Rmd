@@ -18,6 +18,7 @@ library(ggplot2)
 library(tidyr)
 library(cowplot)
 library(ggpubr)
+library(plotly)
 library(purrr)
 select = dplyr::select
 
@@ -157,6 +158,29 @@ animal.psd = psd.molten %>%
 ```
 
 ```{r}
+noisy_psd_trials = c('2019-11-13_OS_signal/OS_trial_6_g0_2',
+                     '2019-11-06_BS_signal/BS_trial_4_g0_2',
+                     '2019-11-07_BS_signal/BS_trial_2_g0_2')
+psd.molten %>%
+  filter(channelLocation == 'CA1', stage_desc == 'DuringStim', stage_dur_sec >= 10) %>%
+  filter(!(trial_id %in% c(noisy_psd_trials))) %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=trial_id, y=log(band_power), colour=laserOn), width=0.5) + 
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-20, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  facet_wrap(exp + animal ~ ., ncol = 4, scales = 'free') +
+  xlab('Frequency (Hz)') +
+  ylab('Log power change') +
+  scale_color_manual(values = c(nolaser.col, laser.col)) +
+  theme(legend.position = 'right') +
+  gtheme -> g
+
+ggplotly(g)
+```
+
+
+```{r}
 animal.psd %>%
   filter(laserOn == 0) %>%
   filter(learning_day==6) %>%
@@ -172,12 +196,157 @@ animal.psd %>%
   ylab('Power z-score') 
 ```
 
+PSD diff
+```{r}
+psd.dayaverage = psd.molten %>%
+  filter(stage_desc == 'DuringStim', stage_dur_sec >= min.stim.stage.dur.sec) %>%
+  filter(!(trial_id %in% c(noisy_psd_trials))) %>%
+  group_by(animal, date, channelLocation, laserOn, learning_day, exp, exp_animal, band_name) %>%
+  dplyr::summarise(band_start_freq=mean(band_start_freq),
+                   band_power.mean=mean(band_power),
+                   band_power.sem=sem(band_power),
+                   n=n())
+
+psd.daydiff = reshape2::dcast(psd.dayaverage,
+                  animal + date + channelLocation + learning_day + exp + exp_animal + band_name + band_start_freq ~ laserOn,
+                  value.var = 'band_power.mean') %>% 
+    dplyr::mutate(logpower.diff = log(`1`) - log(`0`)) %>%
+    filter(!is.na(logpower.diff))
+
+psd.daydiff %>%
+  filter(channelLocation == 'CA1') %>%
+  ggplot() +
+  geom_line(aes(x=band_start_freq, group=date, y=logpower.diff, colour=exp), width=0.5) + 
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+            ymin=-3, ymax=5, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept=0, linetype='dashed') +
+  facet_wrap(exp + animal ~ ., ncol = 4, scales='free_x') +
+  xlab('Frequency (Hz)') +
+  ylab('Log power change') +
+  scale_color_manual(values=expPalette) +
+  theme(legend.position = 'right') +
+  gtheme -> g
+ggplotly(g)
+```
+
+Day-averaged Plot
+```{r}
+animal.psd.daydiff = psd.daydiff %>%
+  dplyr::group_by(band_name, band_start_freq, channelLocation, exp, animal) %>%
+  dplyr::summarise(logpower.diff.mean=mean(logpower.diff, na.rm=TRUE),
+                   logpower.diff.sem=sem(logpower.diff))
+  
+animal.psd.daydiff %>%
+  filter(channelLocation == 'CA1') %>%
+  ggplot() +
+  geom_ribbon(aes(x=band_start_freq, ymin=logpower.diff.mean-logpower.diff.sem, ymax=logpower.diff.mean+logpower.diff.sem),
+              alpha=0.25) +
+  geom_line(aes(x=band_start_freq, y=logpower.diff.mean, colour=exp), width=0.5) + 
+  #geom_rect(data=all.freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band, fill=band), 
+  #          ymin=-3, ymax=5, alpha=0.05) +
+  geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
+          ymin=-1, ymax=1.2, alpha=0.05, fill='grey10') +
+  scale_x_log10(limits=c(2,200), breaks=axis.breaks, labels=axis.labels) +
+  geom_hline(yintercept=0, linetype='dashed') +
+  facet_wrap(exp + animal ~ ., ncol = 4, scales = 'free_x') +
+  xlab('Frequency (Hz)') +
+  ylab('Log power change') +
+  scale_color_manual(values=expPalette) +
+  theme(legend.position = 'right') +
+  gtheme
+ggsave(file=paste0(img_dir, '/', '3_psd_diff.pdf'), 
+       width=15, height=9, unit='cm', dpi=300, device=cairo_pdf)
+```
+Statistics on logpower differences per band
+```{r}
+all.freq.bands.df = data.frame(
+  band=c('slow', 'supra_theta', 'pre_slow_gamma', 'supra_slow_gamma'),
+  xmin=c(3.5, 12, 15, 90),
+  xmax=c(5, 15, 20, 110)
+) %>% bind_rows(freq.bands.df) %>%
+  dplyr::arrange(xmin)
+rownames(all.freq.bands.df) = all.freq.bands.df$band
+
+get.band.name = function(freq) {
+  band_ind = which(freq <= all.freq.bands.df$xmax & freq > all.freq.bands.df$xmin)
+  if (length(band_ind) > 0) {
+    return(as.character(all.freq.bands.df$band[band_ind]))
+  } else {
+    return('ignored')
+  }
+}
+```
+
+Minimum and maximum difference per freq band
+```{r warning=FALSE}
+band.logpower.diff = psd.daydiff %>%
+  dplyr::mutate(band_name = map_chr(band_start_freq, get.band.name)) %>% 
+  group_by(exp, animal, exp_animal, date, learning_day, channelLocation, band_name) %>%
+  dplyr::summarise(min.band.logpower.diff = min(logpower.diff, na.rm=TRUE),
+                   max.band.logpower.diff = max(logpower.diff, na.rm=TRUE)) %>%
+  filter(!is.infinite(min.band.logpower.diff), !is.infinite(max.band.logpower.diff)) %>% # skip trials when NA for logpower.diff
+  dplyr::mutate(exp_animal = paste(exp, animal, sep='_'))
+
+band.logpower.diff$band_name = factor(band.logpower.diff$band_name, levels=c(as.character(all.freq.bands.df$band), 'ignored'))
+```
+
+```{r}
+band.relative.diff = band.logpower.diff %>%
+  dplyr::mutate(band.logpower.diff = max.band.logpower.diff) %>%
+                  #ifelse(band_name %in% c('theta', 'slow_gamma'), max.band.logpower.diff, min.band.logpower.diff)) %>% 
+  reshape2::dcast(
+   animal + date + learning_day + channelLocation + exp + exp_animal ~ band_name,
+   value.var = 'band.logpower.diff') %>% 
+   dplyr::mutate(theta_above_slow = theta - slow, 
+                 theta_above_supra = theta - supra_theta,
+                 slow_gamma_above_supra_theta = `slow gamma` - pre_slow_gamma,
+                 slow_gamma_above_supra = `slow gamma` - supra_slow_gamma) %>% 
+  dplyr::select(-c(theta, slow, supra_theta, `slow gamma`, supra_slow_gamma, pre_slow_gamma, ignored)) %>%
+  reshape2::melt(id.vars = c('animal', 'date', 'learning_day', 'channelLocation', 'exp', 'exp_animal'), 
+                 variable.name='compared.bands',
+                 value.name='relative.diff') 
+
+band.relative.diff %>%
+  filter(channelLocation == 'CA1') %>%
+  ggplot(aes(x=exp, y=relative.diff, text=paste(exp, animal, date, relative.diff))) +
+  geom_jitter(aes(color=exp), shape=1, width=0.25, height=0, alpha=0.5, size=0.5, stroke=0.5) +
+  geom_hline(yintercept=0, linetype='dashed') +
+  facet_wrap(compared.bands ~ ., ncol=4) +
+  scale_color_manual(values=expPalette) +
+  #ylim(c(-0.8, 1.6)) +
+  gtheme +
+  xlab('') + ylab('Relative difference in change') ->
+  g
+ggplotly(g, tip='text')
+ggsave(file=paste0(img_dir, '/', '3_psd_diff_stat.pdf'), 
+       width=10, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
+
+```
+
+```{r}
+tested.df = filter(band.relative.diff, channelLocation == 'CA1', 
+                                    #compared.bands == 'theta_above_slow')
+                                    #compared.bands == 'theta_above_supra')
+                                    #compared.bands == 'slow_gamma_above_supra')
+                                    compared.bands == 'slow_gamma_above_supra_theta')
+m.full = lmerTest::lmer(relative.diff ~ exp + (1 + exp | exp_animal), 
+                        data=tested.df,
+                        REML = TRUE) 
+summary(m.full)
+anova(m.full, refit=FALSE, ddf='Satterthwaite')
+plot.model.diagnostics(m.full, tested.df$animal, tested.df$exp)
+residuals(m.full) %>% shapiro.test()
+```
+
+
 # Laser effect on PSD at Goal
 ```{r}
 animals.psd = psd.molten %>%
   #filter(learning_day >= 5)  %>%
   #filter(animal == 'OS') %>%
   filter(stage_desc %in% c('DuringStim')) %>%
+  filter(!(trial_id %in% c(noisy_psd_trials))) %>%
   group_by(exp, animal, exp_animal, channelLocation, laserOn, stage_desc, band_start_freq) %>%
   dplyr::summarise(sem.power = sem(log(band_power)),
                    band_power = mean(log(band_power)))
@@ -188,7 +357,7 @@ animals.psd = psd.molten %>%
 joined.psd.fit.df = map_dfr(unique(animals.psd$exp_animal), ~ {
   animal.psd = filter(animals.psd, exp_animal == .x)
   animal.psd$name = 'model'
-  animal.fit.low.freq = calc.animal.band.fit.df(animal.psd, c(2.5, 15)) %>%
+  animal.fit.low.freq = calc.animal.band.fit.df(animal.psd, c(2.5, 20), max.npeaks=1) %>%
     dplyr::mutate(animal = animal.psd$animal[1], exp = animal.psd$exp[1], name = paste(name, 'low_freq', sep='_'))
   animal.fit.high.freq = calc.animal.band.fit.df(animal.psd, c(15, 150)) %>%
     dplyr::mutate(animal = animal.psd$animal[1], exp = animal.psd$exp[1], name = paste(name, 'high_freq', sep='_'))
@@ -214,8 +383,8 @@ ca1.psd.fit.df %>%
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
   gtheme +
-  #theme(legend.position = 'none') +
-  scale_linetype_manual(values=c('dashed', 'dashed', 'solid')) +
+  theme(legend.position = 'none') +
+  scale_linetype_manual(values=c('dotted', 'dotted', 'solid')) +
   xlab('Frequency (Hz)') + ylab('Log power')
 
 ggsave(file=paste0(img_dir, '/', '5_ymaze_psd_mean_all.pdf'), 
@@ -227,11 +396,15 @@ Fit background with FOOOF and check quality
 ```{r}
 fit.psd.ymaze.high = fit.background.df(
   filter(psd.molten,
+         channelLocation == 'CA1',
          stage_desc == 'DuringStim',
-         stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec),
+         stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec,
+         !(trial_id %in% c(noisy_psd_trials))),
   freq.bands.df,
   freq.range = c(15, 150),
   fit.knee = FALSE,
+  show.fit = FALSE,
+  max.npeaks = 8,
   extra.group.vars = c('exp_animal'))
 
 summary(fit.psd.ymaze.high$fit_error)
@@ -245,9 +418,9 @@ bac.auc.model = calc.laser.fixed.effects(
   ca1.bac.df, 
   background_auc)
 
-g.bac.auc = plot.samples(ca1.bac.df, background_auc) + 
+g.bac.auc.high = plot.samples(ca1.bac.df, background_auc) + 
   ylab('AUC')
-g.bac.auc
+g.bac.auc.high
 ```
 
 
@@ -269,11 +442,23 @@ plot.laser.change(fit.sgamma.present, !!var) + ylab('Relative Slow Gamma Power (
 sgamma.model = calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var)
 g.sgamma.pow = plot.samples(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var) +
   ylab('Relative Slow Gamma Power (20 - 45 Hz; a.u.)')
-g.sgamma.pow
+#g.sgamma.pow
 
-# Significant not increase in CA3 or CA1 slow gamma when ignoring gfp mice
-#calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), pow_slow_gamma,
-#                         fixed.effects.str = 'laserOn', random.effects.str = '(1 + laserOn | animal)')
+ggplotly(g.sgamma.pow)
+```
+
+Slow gamma peak frequency
+```{r}
+var = quo(peak_slow_gamma)
+
+group_by(fit.sgamma.present, channelLocation, exp, laserOn) %>%
+  dplyr::summarise(mean(!!var), sem(!!var), n())
+
+plot.laser.change(fit.sgamma.present, !!var) + ylab('Slow Gamma Peak (20 - 45 Hz)')
+sgamma.model = calc.laser.fixed.effects(subset(fit.sgamma.present, channelLocation == 'CA1'), (!!var))
+g.sgamma.peak = plot.samples(subset(fit.sgamma.present, channelLocation == 'CA1'), !!var) +
+  ylab('Slow Gamma Peak frequency')
+g.sgamma.peak
 ```
 
 
@@ -282,13 +467,14 @@ Fit background with FOOOF and check quality
 ```{r}
 fit.psd.ymaze.low = fit.background.df(
   filter(psd.molten,
-         #exp=='gfp-control', channelLocation == 'CA1',
+         channelLocation=='CA1',
          stage_desc == 'DuringStim',
-         stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec),
+         stage_dur_sec - noise_dur_sec >= min.stim.stage.dur.sec,
+         !(trial_id %in% c(noisy_psd_trials))),
   freq.bands.df,
-  #show.fit=TRUE,
-  #freq.range = c(2, 20),
+  show.fit=FALSE,
   freq.range = c(3.5, 15),
+  max.npeaks = 1,
   fit.knee = FALSE,
   extra.group.vars = c('exp_animal'))
 
@@ -318,21 +504,57 @@ fit.theta.present = filter(fit.psd.ymaze.low) %>%
 
 plot.laser.change(fit.theta.present, !!var) + ylab('Relative Theta Power (5 - 12 Hz)')
 
-group_by(fit.theta.present, channelLocation, exp, laserOn) %>%
+group_by(fit.theta.present, channelLocation, laserOn) %>%
   dplyr::summarise(mean(!!var), sem(!!var))
 
 m.full = calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), pow_theta)
 g.theta.pow = plot.samples(subset(fit.theta.present, channelLocation == 'CA1'), pow_theta) +
   ylab('Relative theta power (5 - 12 Hz)')
 g.theta.pow
+ggplotly(g.theta.pow)
+```
+Reduced background spectrum in low frequency bands
+```{r}
+var = quo(background_auc)
+fit.theta.present = filter(fit.psd.ymaze.low) %>%
+  dplyr::filter(!is.na(!!var)) 
+
+plot.laser.change(fit.theta.present, !!var) + ylab('Theta Peak (Hz)')
+
+group_by(fit.theta.present, channelLocation, exp, laserOn) %>%
+  dplyr::summarise(mean(!!var), sem(!!var))
+
+m.full = calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), !!var)
+g.bac.auc.low = plot.samples(subset(fit.theta.present, channelLocation == 'CA1'), !!var) +
+  ylab('AUC')
+g.bac.auc.low
+#g.theta.peak
+ggplotly(g.bac.auc.low)
 ```
 
+Theta peak
+```{r}
+var = quo(peak_theta)
+fit.theta.present = filter(fit.psd.ymaze.low) %>%
+  dplyr::filter(!is.na(!!var)) 
+
+plot.laser.change(fit.theta.present, !!var) + ylab('Theta Peak (Hz)')
+
+group_by(fit.theta.present, channelLocation, exp, laserOn) %>%
+  dplyr::summarise(mean(!!var), sem(!!var))
+
+m.full = calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), !!var)
+g.theta.peak = plot.samples(subset(fit.theta.present, channelLocation == 'CA1'), !!var) +
+  ylab('Theta peak (5 - 12 Hz)')
+g.theta.peak
+ggplotly(g.theta.peak)
+```
 
 ## Save plot with stats
 ```{r}
-plot_grid(g.bac.auc, g.theta.pow, g.sgamma.pow, ncol=3)
+plot_grid(g.bac.auc.low, g.bac.auc.high, g.theta.pow, g.theta.peak, g.sgamma.pow, ncol=5)
 ggsave(file=paste0(img_dir, '/', '5_psd_stats.pdf'), 
-       width=12.2, height=5, unit='cm', dpi=300, device=cairo_pdf)
+       width=18, height=5, unit='cm', dpi=300, device=cairo_pdf)
 ```
 
 Theta already higher during the ymaze than during stim in sleep

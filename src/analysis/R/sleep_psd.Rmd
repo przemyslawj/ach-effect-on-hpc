@@ -43,17 +43,34 @@ psddf = bind_rows(
   read_csv(file.path(data_dir, 'trial_results_gfp', input.filename)))
 
 psddf = tidyr::replace_na(psddf, list(exp = 'main-effect')) %>%
-  dplyr::mutate(exp_animal = paste(exp, animal, sep='_'))
+  dplyr::mutate(exp_animal = paste(exp, animal, sep='_'),
+                trial_id=paste(date, animal, trial ,sep='_'))
 psddf$exp = as.factor(psddf$exp)
 psddf$animal = as.factor(psddf$animal)
 psddf$exp_animal = as.factor(psddf$exp_animal)
 psddf$channel = as.factor(psddf$channel)
 psddf$laserOn = as.factor(psddf$laserOn)
-
-psddf = psddf %>%
-  dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_')) %>%
-  filter(noise_dur_sec <= 5)
 psddf$trial_id = as.factor(psddf$trial_id)
+max.noise.dur.sec = 5  # threshold for uninterrupted sleep / lack of noise in the signal
+```
+
+
+Export epochs in succession (for manual count from csv)
+```{r}
+psddf %>% 
+  filter(channelLocation == 'CA1', stage_desc != 'after_stim') %>%
+  dplyr::select(exp, animal, noise_dur_sec, trial, trial_id, stage_desc, laserOn) %>%
+  filter(noise_dur_sec > max.noise.dur.sec) 
+  #write_csv('/tmp/sleep_epochs.csv')
+
+epochs_succession_len = c(80, 20, 30, 7, 19, 16, 5, 5, 12, 19, 5, 4, 11, 8, 12, 50, 14, 4, 17, 14, 12, 3, 1)
+summary(epochs_succession_len)
+```
+
+```{r}
+psddf = psddf %>%
+  filter(noise_dur_sec <= max.noise.dur.sec) %>%
+  filter(channelLocation == 'CA1')
 
 freq.bands.df = data.frame(
   band=c('theta', 'slow gamma'),
@@ -63,16 +80,22 @@ freq.bands.df = data.frame(
 rownames(freq.bands.df) = freq.bands.df$band
 ```
 
-# Effects on the signal spectrum
 Number of trials per animal
 ```{r}
-psddf %>% group_by(animal, exp) %>%
+psddf %>% 
+  filter(stage_desc != 'after_stim') %>%
+  dplyr::mutate(epoch_id=paste(trial_id, laserOn, sep='_laser')) %>%
+  dplyr::summarise(ntrials=length(unique(epoch_id)))
+                   
+psddf %>% 
+  filter(stage_desc != 'after_stim') %>%
+  group_by(animal, exp, date) %>%
   dplyr::summarise(ntrials=length(unique(trial_id))) %>%
   group_by(exp) %>%
   dplyr::summarise(mean(ntrials), sem(ntrials), nanimals=n())
 ```
 
-
+# Effects on the signal spectrum
 ```{r}
 psd.molten = melt.freq.bands(psddf, extra.id.vars = c('state', 'exp', 'exp_animal'))
 ```
@@ -126,7 +149,7 @@ animal.psd.diff %>%
   ylab('Log power change') +
   scale_color_manual(values=expPalette) +
   theme(legend.position = 'right') +
-  gtheme +
+  gtheme
 
 ggsave(file=paste0(img_dir, '/', '2_psd_change_all.pdf'), 
        width=23, height=17, unit='cm', dpi=300, device=cairo_pdf)
@@ -480,6 +503,6 @@ pairwise.post.hoc(m.full)
 ```{r}
 plot_grid(g.bac.auc, g.theta.pow, g.theta.freq, g.sgamma.pow, ncol=4)
 ggsave(file=paste0(img_dir, '/', '2_psd_stats.pdf'), 
-       width=14, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
+       width=14, height=5.0, unit='cm', dpi=300, device=cairo_pdf)
 ```
 

@@ -103,11 +103,13 @@ swr.diff.pct.df %>%
 
 CA1 ripple durations
 ```{r}
-ca1.ripple.df = filter(ripple.df, channelLocation == 'CA1', stage_desc != 'after_stim') 
+ca1.ripple.df = filter(ripple.df, channelLocation == 'CA1', stage_desc != 'after_stim') %>%
+  dplyr::mutate(ripple_dur=end_time - start_sec)
 m.full = calc.laser.fixed.effects(filter(ca1.ripple.df, peak_freq >= 140), log(ripple_dur))
 
 ggplot(filter(ca1.ripple.df, peak_freq >= 140), aes(x=ripple_dur*1000)) +
-  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), binwidth = 10, alpha=0.5, position='identity') +
+  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), 
+                 breaks=seq(20,160,10), alpha=0.5, position='identity') +
   facet_grid(. ~ exp) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
@@ -123,7 +125,8 @@ CA1 ripple peak frequency
 m.full = calc.laser.fixed.effects(ca1.ripple.df, peak_freq)
 
 ggplot(ca1.ripple.df, aes(x=peak_freq)) +
-  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), binwidth = 10, alpha=0.5, position='identity') +
+  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), 
+                 breaks=seq(80,250,10), alpha=0.5, position='identity') +
   facet_grid(. ~ exp) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +

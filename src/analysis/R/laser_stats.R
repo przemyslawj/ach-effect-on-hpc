@@ -7,7 +7,7 @@ sem = function(x) sqrt( var(x, na.rm=TRUE) / length(x))
 
 create.animal.summary = function(df, var, group_vars=vars(animal, exp, exp_animal, correct, laserOn, stage_desc, channelLocation)) {
   var = enquo(var)
-  if (!'correct' %in% colnames(ca1.psddf)) {
+  if (!'correct' %in% colnames(df)) {
     df$correct = 1
   }
   group_by(df, !!!group_vars) %>% 

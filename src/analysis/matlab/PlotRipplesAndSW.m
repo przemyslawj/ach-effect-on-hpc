@@ -2,7 +2,7 @@ max_recording_ripples = 100;
 
 datarootdir = '/mnt/DATA/chat_ripples/y-maze';
 secondOffset = 0;
-is_ymaze_trial = 0;
+is_ymaze_trial = 1;
 is_after_ymaze = 0;
 
 diode_ripples = 1;
@@ -22,10 +22,12 @@ ripples_filename = 'ripples_diode_th7.csv';
 
 ripplestable = readtable([datarootdir filesep 'trial_results' filesep ripples_filename]);
 if is_ymaze_trial
-    secondOffset = 3;
+    secondOffset = 0;
     ripplestable = ripplestable(strcmp(ripplestable.stage_desc, 'DuringStim'),:);
 end
-ripplestable = ripplestable(strcmp(ripplestable.exp, 'gfp-control' ) == 1, :);
+ripplestable = ripplestable(strcmp(ripplestable.exp, 'gfp-control' ) == 0, :);
+ripplestable = ripplestable(ripplestable.peak_freq >= 140, :);
+
 %ripplestable = ripplestable(strcmp(ripplestable.animal, 'GD') == 1,:);
 
 trials_fpath = [datarootdir filesep 'trials.csv'];
@@ -138,21 +140,19 @@ for gi = 1:max(g)
             slot_h = floor((i - 1)/ nslots_w) + 1;
             slot_i = 2 * (slot_h - 1) * nslots_w + mod(i - 1, nslots_w) + 1;
 
-            %subplot(2 * ripple_slots, slot_w, slot_h);
-            hAxFilteredDiode(i) = subplot(nslots_h * 5, nslots_w, slot_i);
-            %channel_zscored_filtered(indecies), fs, ...
+            hAxFilteredDiode(i) = subplot(nslots_h * 5, nslots_w, slot_i + 3 * nslots_w);
             plotSWR(time(indecies), ...
                 channel_filtered(indecies), fs, ...
                 group_ripplestable.start_sec(i) + peak_offset_sec, ...
                 group_ripplestable.end_time(i) + peak_offset_sec);
 
-            hAxRawDiode(i) = subplot(nslots_h * 5, nslots_w, slot_i + nslots_w);
+            hAxRawDiode(i) = subplot(nslots_h * 5, nslots_w, slot_i + 2 * nslots_w);
             plot(time(indecies), channel_signal_diode(indecies));
             %ylim([-0.3, 0.3]);
 
-            hAxRawChan1(i) = subplot(nslots_h * 5, nslots_w, slot_i + 2 * nslots_w);
+            hAxRawChan1(i) = subplot(nslots_h * 5, nslots_w, slot_i);
             plot(time(indecies), dataArray(fst_chan, indecies));
-            hAxRawChan2(i) = subplot(nslots_h * 5, nslots_w, slot_i + 3 * nslots_w);
+            hAxRawChan2(i) = subplot(nslots_h * 5, nslots_w, slot_i + nslots_w);            
             plot(time(indecies), dataArray(snd_chan, indecies));
             hAxEMG(i) = subplot(nslots_h * 5, nslots_w, slot_i + 4 * nslots_w);
             plot(time(indecies), dataDiode(emgIdx, indecies));
@@ -170,7 +170,7 @@ for gi = 1:max(g)
 
 
         if save_plots
-            fig_dir = fullfile(datarootdir, 'swrs_gfp', animal_code);
+            fig_dir = fullfile(datarootdir, 'swrs', animal_code);
             if ~isfile(fig_dir)
                 mkdir(fig_dir);
             end

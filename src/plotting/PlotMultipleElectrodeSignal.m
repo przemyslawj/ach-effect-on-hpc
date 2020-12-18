@@ -1,5 +1,5 @@
-path = '/mnt/DATA/chat_ripples/baseline/';
-%path = '/mnt/DATA/chat_ripples/y-maze/';
+%path = '/mnt/DATA/chat_ripples/baseline/';
+path = '/mnt/DATA/chat_ripples/y-maze/';
 %path = '/mnt/DATA/chat_ripples/y-maze/2019-11-13/signal';
 
 [binName, path] = uigetfile('*.bin', 'LFP file', path);

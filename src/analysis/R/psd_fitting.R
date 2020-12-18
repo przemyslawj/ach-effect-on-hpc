@@ -11,13 +11,14 @@ fooof.synth = reticulate::import('fooof.synth')
 
 calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80), 
                           show.fit=FALSE, fit.knee=TRUE,
-                          peak.width.limits = c(1, 30)) {
+                          peak.width.limits = c(1, 80),
+                          max.npeaks = 8) {
   background.mode = 'fixed'
   if (fit.knee) {
     background.mode = 'knee'
   }
   fm = fooof$FOOOF(background_mode = background.mode, 
-                   max_n_peaks = 8, 
+                   max_n_peaks = max.npeaks, 
                    verbose = TRUE,
                    peak.width.limits)
   spectra.mat = np_array(c(sample.psd.df$band_power))
@@ -78,7 +79,8 @@ fit.background.df = function(psd.molten,
                              freq.range = c(3.5, 80), 
                              fit.knee=TRUE, 
                              show.fit=FALSE,
-                             extra.group.vars=c()) {
+                             extra.group.vars=c(),
+                             max.npeaks=8) {
   id.vars = c('animal', 'trial_id', 'stage_desc', 'laserOn', 'channelLocation', 'exp')
   psd.entries = psd.molten %>% 
     dplyr::select(all_of(c(id.vars, extra.group.vars))) %>%
@@ -98,7 +100,8 @@ fit.background.df = function(psd.molten,
                                 freq.bands.df, #filter(freq.bands.df, band != 'theta'), 
                                 freq.range = freq.range, 
                                 show.fit = show.fit,
-                                fit.knee = fit.knee)
+                                fit.knee = fit.knee,
+                                max.npeaks = max.npeaks)
       pow.list$fm = NA
       return(cbind(psd.entries[.x,], #lowbands.pow.list, 
                    pow.list)) },
@@ -146,16 +149,24 @@ fm2df = function(fm, channelLocation, laserOn) {
   df
 }
 
-calc.animal.band.fit.df = function(animal.psd, freq.range = c(1, 150), fit.knee = FALSE) {
+calc.animal.band.fit.df = function(animal.psd, freq.range=c(1, 150), fit.knee=FALSE, max.npeaks=1) {
   ca1.psd = filter(animal.psd, channelLocation == 'CA1') %>%
     dplyr::mutate(band_power = exp(band_power) ** log(10))
-  ca1.fit.1 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA1', 1)
-  ca1.fit.0 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA1', 0)
+  ca1.fit.1 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==1), freq.bands.df, freq.range, show.fit=TRUE, 
+                                   fit.knee=fit.knee, max.npeaks=max.npeaks)$fm, 
+                    'CA1', 1)
+  ca1.fit.0 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit=TRUE, 
+                                   fit.knee=fit.knee, max.npeaks=max.npeaks)$fm, 
+                    'CA1', 0)
   
   ca3.psd = filter(animal.psd, channelLocation == 'CA3') %>%
     dplyr::mutate(band_power = exp(band_power) ** log(10))
-  ca3.fit.1 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA3', 1)
-  ca3.fit.0 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit = TRUE, fit.knee = fit.knee)$fm, 'CA3', 0)
+  ca3.fit.1 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit=TRUE, 
+                                   fit.knee=fit.knee, max.npeaks=max.npeaks)$fm, 
+                    'CA3', 1)
+  ca3.fit.0 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit=TRUE, 
+                                   fit.knee=fit.knee, max.npeaks=max.npeaks)$fm,
+                    'CA3', 0)
   
   fit.df = bind_rows(ca1.fit.0, ca1.fit.1, ca3.fit.0, ca3.fit.1)
   fit.df$laserOn = as.factor(fit.df$laserOn)

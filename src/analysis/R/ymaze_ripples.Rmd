@@ -108,6 +108,14 @@ stage.dur.df %>%
 
 Duration spend during navigation vs goal zone 
 ```{r}
+
+goal.loc.durs = psddf.ymaze %>% 
+  filter(channelLocation == 'CA1') %>%
+  filter(correct == 1) %>%
+  filter(stage_dur_sec > 0) %>% # ignore trials with failed tracking
+  filter(stage_desc == 'DuringStim')
+m.full = calc.laser.fixed.effects(goal.loc.durs, stage_dur_sec)
+
 stage.dur.df = psddf.ymaze %>% 
   filter(exp == 'main-effect', channelLocation == 'CA1') %>%
   filter(correct == 1) %>%
@@ -123,14 +131,16 @@ stage.dur.df %>%
   scale_x_discrete(labels=c('Stimulation during navigation', 'Stimulation at goal'))
 
 stage.dur.df %>%
-  group_by(date, learning_day, correct, stage_desc) %>% 
+  group_by(date, learning_day, correct, laserOn, stage_desc) %>% 
   dplyr::summarise(mean(stage_dur_sec), sem(stage_dur_sec), min(stage_dur_sec), max(stage_dur_sec), n=n()) 
 
 stage.dur.df %>%
   dplyr::ungroup() %>%
   filter(correct==1) %>%
-  group_by(stage_desc) -> X
+  group_by(stage_desc, laserOn) -> X
 dplyr::summarise(X, mean(stage_dur_sec), sem(stage_dur_sec), max(stage_dur_sec))
+
+
 quantile(X$stage_dur_sec, probs = c(0.05, 0.95))
 ```
 
@@ -174,12 +184,6 @@ compared.ripples.df %>%
                    mean.incidence = mean(swr_incidence),
                    sem.incidence = sem(swr_incidence),
                    n=n()) 
-
-compared.ripples.df %>%
-  ggplot(aes(x=laserOn, y=swr_incidence)) +
-  geom_violin() +
-  facet_grid(stage_desc ~ exp + correct, scales = 'free') +
-  ylab('Ripple incidence at goal (Hz)')
 ```
 Comparison of ripples at goal between correct and incorrect trials
 ```{r}
@@ -201,42 +205,7 @@ animal.summary.ripples.goal = filter(animal.summary.ripples, stage_desc == 'Duri
 t.test(subset(animal.summary.ripples.goal, correct==0)$has_swrs.pct,
        subset(animal.summary.ripples.goal, correct==1)$has_swrs.pct,
        paired=TRUE)
-
-#compared.ripples.df.goal = filter(compared.ripples.df, stage_desc == 'DuringStim', laserOn == 0)
-#m.full = lmerTest::lmer(swr_incidence ~ correct + (1 + correct | exp_animal), 
-#                        data=compared.ripples.df.goal,
-#                        REML = TRUE) 
-#summary(m.full)
-#print(anova(m.full, refit=FALSE, ddf='Satterthwaite'))
 ```
-
-
-Model for ripples at start and goal between correct and incorrect trials
-```{r}
-m.full = lmerTest::lmer(has_swrs.pct ~ stage_desc * correct + (1 + stage_desc + correct | exp_animal), 
-                        data=animal.summary.ripples,
-                        REML = TRUE) 
-summary(m.full)
-print(anova(m.full, refit=FALSE, ddf='Satterthwaite'))
-lsmeansLT(m.full, pairwise=TRUE)
-plot.model.diagnostics(m.full, animal.summary.ripples$exp_animal, animal.summary.ripples$stage_desc)
-create.animal.summary(animal.summary.ripples, has_swrs.pct, group_vars=vars(stage_desc, correct))
-
-ggplot(animal.summary.ripples, aes(x=correct, y=100 * has_swrs.pct)) +
-  #geom_point(aes(color=exp), shape=1, alpha=1.0, size=1.0, stroke=0.5) +
-  geom_line(aes(group=exp_animal), color='#444444') +
-  facet_grid(. ~ stage_desc, scales = 'free') +
-  xlab('Successful') +
-  ylab('Trials (%)') +
-  scale_x_discrete(labels = c('No', 'Yes')) +
-  scale_color_manual(values=expPalette) +
-  gtheme +
-  theme(legend.position = 'none')
-ggsave(paste0(img_dir, '/5-trials-with-ripples.pdf'), units = 'cm',
-       dpi=300, device=cairo_pdf,
-       height=4.0, width=4.3)
-```
-
 
 Summary of ripples per animal and day
 ```{r}
@@ -249,7 +218,7 @@ psddf.ymaze.correct %>%
 psddf.ymaze.correct %>%
   filter(!(exp_animal %in% excluded.swr.exp_animals)) %>%
   filter(laserOn == 0, learning_day >= 1, stage_desc == 'Total', channelLocation == 'CA1', exp == 'main-effect') %>%
-  group_by(animal, learning_day) %>%
+  group_by(exp, animal, learning_day) %>%
   dplyr::summarise(has_ripples.pct=sum(swr_incidence > 0) / n(),
                    mean.incidence = mean(swr_incidence)) 
 ```
@@ -324,12 +293,8 @@ m.full = ca1.psddf %>%
 
 ca1.psddf %>%
   filter(laserOn == 0, stage_desc == 'DuringStim') %>%
-  #group_by(exp, animal, exp_animal, learning_day) %>%
-  #dplyr::summarise(m.swr_incidence=mean(swr_incidence),
-  #                 sem.swr_incidence = sem(swr_incidence)) %>%
   ggplot(aes(x=learning_day, y=swr_incidence)) +
   geom_jitter(aes(color=exp), shape=1, width=0.25, height=0, alpha=0.5, size=0.5, stroke=0.5) +
-  #geom_line(aes(group=exp_animal), color='#444444') +
   scale_color_manual(values=expPalette) +
   xlab('Learning day') + ylab('SWR incidence (Hz)') +
   gtheme + theme(legend.position = 'none')
@@ -354,19 +319,43 @@ ggsave(paste0(img_dir, '/5-ripples_incidence.pdf'), units = 'cm',
 
 Peak frequency
 ```{r}
-ca1.ripple.df = filter(ripples.ymaze, channelLocation == 'CA1', stage_desc == 'DuringStim', correct == 1) %>%
+ca1.ripple.df = filter(ripples.ymaze, channelLocation == 'CA1', stage_desc == 'DuringStim') %>%
   dplyr::mutate(ripple_dur = end_time - start_sec)
 
 ripple_freqs = pull(filter(ca1.ripple.df, laserOn==0, peak_freq >= 140), peak_freq)
 summary(ripple_freqs)
 sem(ripple_freqs)
 ```
+Diffference in ripples on correct and incorrect trials
+```{r}
+tested.df = filter(ca1.ripple.df, laserOn==0, !is.na(correct), peak_freq >= 140)
+var = quo(peak_freq)
+m.full = calc.laser.fixed.effects(tested.df, 
+                                  peak_freq,
+                                  fixed.effects.str = 'correct',
+                                  random.effects.str = '(1 | animal)')
+tested.df %>%
+  group_by(correct) %>%
+  dplyr::summarise(mean(!!var), sem(!!var), n())
+
+
+var = quo(ripple_dur)
+m.full = calc.laser.fixed.effects(tested.df, 
+                                  log10(ripple_dur ^ (-1.5)),
+                                  fixed.effects.str = 'correct',
+                                  random.effects.str = '(1 | animal)')
+tested.df %>%
+  group_by(correct) %>%
+  dplyr::summarise(mean(!!var) * 1000, sem(!!var) * 1000, n())
+```
+
 
 ```{r}
-m.full = calc.laser.fixed.effects(filter(ca1.ripple.df, peak_freq >= 140), peak_freq)
+m.full = calc.laser.fixed.effects(filter(ca1.ripple.df, peak_freq >= 140, correct==1), peak_freq^(-1.0))
 
-ggplot(ca1.ripple.df, aes(x=peak_freq)) +
-  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), binwidth = 10, alpha=0.5, position='identity') +
+ggplot(filter(ca1.ripple.df, !is.na(correct), correct == 1), aes(x=peak_freq)) +
+  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), 
+                 breaks=seq(80,250,10), alpha=0.5, position='identity') +
   facet_grid(. ~ exp) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
@@ -385,7 +374,9 @@ sem(ripple_durs)
 m.full = calc.laser.fixed.effects(filter(ca1.ripple.df, peak_freq >= 140), log(ripple_dur))
 
 ggplot(filter(ca1.ripple.df, peak_freq >= 140), aes(x=ripple_dur*1000)) +
-  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), binwidth = 10, alpha=0.5, position='identity') +
+  geom_histogram(aes(color=laserOn, y=..count.., fill=laserOn), 
+                 breaks=seq(20,100,10), alpha=0.5, 
+                 position='identity') +
   facet_grid(. ~ exp) +
   scale_color_manual(values = c(nolaser.col, laser.col)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
