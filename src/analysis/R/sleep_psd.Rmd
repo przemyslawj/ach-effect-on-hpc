@@ -133,7 +133,13 @@ animal.psd.diff = psd.diff %>%
   dplyr::group_by(band_name, band_start_freq, channelLocation, state, exp, animal) %>%
   dplyr::summarise(logpower.diff.mean=mean(logpower.diff, na.rm=TRUE),
                    logpower.diff.sem=sem(logpower.diff))
-  
+
+axis.breaks=c(1:9,seq(10,100,10), 200)
+axis.labels=rep('', length(axis.breaks))
+axis.labels[1]=1
+axis.labels[10]=10
+axis.labels[19]=100
+
 animal.psd.diff %>%
   filter(channelLocation == 'CA1') %>%
   ggplot() +
@@ -197,6 +203,11 @@ band.relative.diff %>%
 ggsave(file=paste0(img_dir, '/', '2_psd_diff_stat.pdf'), 
        width=10, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
 
+band.relative.diff %>%
+  filter(channelLocation == 'CA1') %>% 
+  dplyr::ungroup() %>%
+  dplyr::select(exp, animal, compared.bands, relative.diff) %>%
+  write.csv(file.path(img_dir, 'Figure6 - figure supplement 2 - Source Data - PSD change per freq band.csv'))
 ```
 
 
@@ -383,6 +394,10 @@ m.full = calc.laser.fixed.effects(filter(fit.psd.df.high, channelLocation == 'CA
 pairwise.post.hoc(m.full) 
 print('ntrials: ')
 length(unique(fit.psd.df.high$trial_id))
+
+dplyr::select(filter(fit.psd.df.high, channelLocation == 'CA1'), exp, animal, laserOn, background_auc) %>%
+  write.csv(file.path(img_dir, 'Figure 6D - Source Data - Aperiodic component AUC.csv'))
+
 ```
 ```{r}
 fit.psd.df.high %>% 
@@ -411,6 +426,9 @@ var = quo(pow_slow_gamma)
 fit.sgamma.present = fit.psd.df.high %>%
   filter(!is.na(!!var))
   #dplyr::mutate(!!var := ifelse(is.na(!!var), 0, !!var))
+
+dplyr::select(filter(fit.sgamma.present, channelLocation == 'CA1'), exp, animal, laserOn, pow_slow_gamma) %>%
+  write.csv(file.path(img_dir, 'Figure 6G - Source Data - Slow Gamma Power.csv'))
 
 g.sgamma.pow = plot.samples(filter(fit.sgamma.present, channelLocation == 'CA1'), !!var) + 
   ylab('Relative Slow Gamma Power (25 - 45 Hz)')
@@ -474,6 +492,9 @@ var = quo(pow_theta)
 fit.theta.present = fit.psd.df.low %>%
   filter(!is.na(!!var))
 
+dplyr::select(filter(fit.theta.present, channelLocation == 'CA1'), exp, animal, laserOn, pow_theta) %>%
+  write.csv(file.path(img_dir, 'Figure 6E - Source Data - Theta Power.csv'))
+
 m.full = calc.laser.fixed.effects(filter(fit.theta.present, channelLocation == 'CA1'), 
                                   log(pow_theta))
 pairwise.post.hoc(m.full)
@@ -493,11 +514,13 @@ filter(fit.psd.df.low, !is.na(!!peak_var)) %>%
   dplyr::group_by(channelLocation, laserOn) %>%
   dplyr::summarise(mean(peak_theta.mean), sem(peak_theta.mean))
 
+dplyr::select(filter(fit.psd.df.low, channelLocation == 'CA1'), exp, animal, laserOn, peak_theta) %>%
+  write.csv(file.path(img_dir, 'Figure 6F - Source Data - Theta peak frequency.csv'))
+
 g.theta.freq = plot.samples(filter(fit.psd.df.low, channelLocation == 'CA1'), !!peak_var) + ylab('Theta peak frequency (Hz)')
 g.theta.freq
 m.full = calc.laser.fixed.effects( filter(fit.psd.df.low, !is.na(!!peak_var), channelLocation == 'CA1'), log(!!peak_var))
 pairwise.post.hoc(m.full)
-#calc.laser.fixed.effects( filter(fit.psd.df.low, !is.na(!!peak_var), channelLocation == 'CA3'), !!peak_var)
 ```
 
 ```{r}

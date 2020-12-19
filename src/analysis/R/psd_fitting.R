@@ -53,7 +53,8 @@ calc.bands.pow = function(sample.psd.df, freq.bands.df, freq.range=c(3.5, 80),
     fm$print_results()
     matplot(fm$freqs, 
             cbind(fm$power_spectrum, fm$fooofed_spectrum_, fm[['_bg_fit']]), 
-            type='l', lty=1:5, log = "x", main=paste(sample.psd.df$animal[1], sample.psd.df$channelLocation[1], 'laser =', sample.psd.df$laser[1]))
+            type='l', lty=1:5, log = "x", main=paste(sample.psd.df$animal[1], sample.psd.df$channelLocation[1],
+                                                     'laser =', sample.psd.df$laser[1]))
     res$fm = fm
   }
   return(res)
@@ -158,17 +159,7 @@ calc.animal.band.fit.df = function(animal.psd, freq.range=c(1, 150), fit.knee=FA
   ca1.fit.0 = fm2df(calc.bands.pow(subset(ca1.psd, laserOn==0), freq.bands.df, freq.range, show.fit=TRUE, 
                                    fit.knee=fit.knee, max.npeaks=max.npeaks)$fm, 
                     'CA1', 0)
-  
-  ca3.psd = filter(animal.psd, channelLocation == 'CA3') %>%
-    dplyr::mutate(band_power = exp(band_power) ** log(10))
-  ca3.fit.1 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==1), freq.bands.df, freq.range, show.fit=TRUE, 
-                                   fit.knee=fit.knee, max.npeaks=max.npeaks)$fm, 
-                    'CA3', 1)
-  ca3.fit.0 = fm2df(calc.bands.pow(subset(ca3.psd, laserOn==0), freq.bands.df, freq.range, show.fit=TRUE, 
-                                   fit.knee=fit.knee, max.npeaks=max.npeaks)$fm,
-                    'CA3', 0)
-  
-  fit.df = bind_rows(ca1.fit.0, ca1.fit.1, ca3.fit.0, ca3.fit.1)
+  fit.df = bind_rows(ca1.fit.0, ca1.fit.1)
   fit.df$laserOn = as.factor(fit.df$laserOn)
   fit.df
 }

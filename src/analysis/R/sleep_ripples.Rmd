@@ -77,6 +77,10 @@ sem(ripple_freqs)
 CA1
 ```{r}
 ca1.psddf = filter(psddf, channelLocation == 'CA1', stage_desc != 'after_stim')
+
+dplyr::select(ca1.psddf, exp, animal, laserOn, swr_incidence) %>%
+  write.csv(file.path(img_dir, 'Figure 5C - Source Data - SWR incidence.csv'))
+
 m.full = calc.laser.fixed.effects(ca1.psddf, swr_incidence)
 plot.samples(ca1.psddf, swr_incidence) + ylab('Ripple incidence (Hz)')
 pairwise.post.hoc(m.full)
@@ -105,6 +109,10 @@ CA1 ripple durations
 ```{r}
 ca1.ripple.df = filter(ripple.df, channelLocation == 'CA1', stage_desc != 'after_stim') %>%
   dplyr::mutate(ripple_dur=end_time - start_sec)
+
+dplyr::select(ca1.ripple.df, exp, animal, laserOn, peak_freq, ripple_dur) %>%
+  write.csv(file.path(img_dir, 'Figure 5 - figure supplement 1 - Source Data - Ripples spectral peak frequency and duration.csv'))
+
 m.full = calc.laser.fixed.effects(filter(ca1.ripple.df, peak_freq >= 140), log(ripple_dur))
 
 ggplot(filter(ca1.ripple.df, peak_freq >= 140), aes(x=ripple_dur*1000)) +
@@ -162,6 +170,11 @@ binned.ripple.df = ripple.df %>%
   filter(channelLocation == channel.loc, exp == 'main-effect') %>%
   filter(is.swr) %>%
   bin.ripples(bin_dur=5)
+
+binned.ripple.df %>% 
+  dplyr::ungroup() %>%
+  dplyr::select(laserOn, bin_sec, trial_id, incidence) %>%
+  write.csv(file.path(img_dir, 'Figure 5B - Source Data - SWRs histogram.csv'))
 
 incidence.summary = binned.ripple.df %>%
   dplyr::group_by(bin_sec, laserOn) %>%

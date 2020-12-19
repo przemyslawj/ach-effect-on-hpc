@@ -205,6 +205,8 @@ animal.summary.ripples.goal = filter(animal.summary.ripples, stage_desc == 'Duri
 t.test(subset(animal.summary.ripples.goal, correct==0)$has_swrs.pct,
        subset(animal.summary.ripples.goal, correct==1)$has_swrs.pct,
        paired=TRUE)
+write.csv(dplyr::select(animal.summary.ripples.goal, exp, animal, correct, has_ripples.pct, n),
+          file.path(img_dir, 'Figure 4C - Source Data - Percent of trials with SWRs at goal.csv'))
 ```
 
 Summary of ripples per animal and day
@@ -242,6 +244,8 @@ trial.renumber = trials.sample %>%
 ripples.sample = ripples.ymaze %>% 
   filter(stage_desc %in% selected.stages)  %>%
   filter(trial_id %in% trials.sample$trial_id) 
+write.csv(dplyr::select(ripples.sample, peak_t, trial_id, trial_rank, laserOn), 
+          file.path(img_dir, '4B-Time_of_SWRs.csv'))
 
 trials.sample = left_join(trials.sample, trial.renumber)
 ripples.sample = left_join(ripples.sample, trial.renumber)
@@ -302,10 +306,21 @@ ca1.psddf %>%
 ggsave(file.path(img_dir, '5-ripples_over_learning.pdf'), units = 'cm',
        dpi=300, device=cairo_pdf,
        height=3.7, width=4)
+
+ca1.psddf %>%
+  filter(laserOn == 0, stage_desc == 'DuringStim') %>%
+  dplyr::ungroup() %>%
+  dplyr::select(exp, animal, learning_day, swr_incidence) %>%
+  write.csv(file.path(img_dir, 'Figure 4D - Source Data - SWR incidence per learning day.csv'))
 ```
 
 
 ```{r}
+ca1.psddf %>%
+  dplyr::ungroup() %>%
+  dplyr::select(exp, animal, learning_day, trial_id, laserOn, swr_incidence) %>%
+  write.csv(file.path(img_dir, 'Figure 4E - Source Data - SWRs at Goal.csv'))
+
 plot.samples(ca1.psddf, swr_incidence) +
   #ylim(c(0, 0.35)) +
   ylab('SWR incidence (Hz)')
@@ -361,6 +376,11 @@ ggplot(filter(ca1.ripple.df, !is.na(correct), correct == 1), aes(x=peak_freq)) +
   scale_fill_manual(values = c(nolaser.col, laser.col)) +
   gtheme +
   xlab('Peak frequency (Hz)') + ylab('# Ripples')
+
+filter(ca1.ripple.df, !is.na(correct), correct == 1) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(animal, exp, trial_id, laserOn, peak_t, peak_freq, ripple_dur) %>%
+  write.csv(file.path(img_dir, 'Figure4-figure supplement 2 - Source Data - Ripples spectral peak frequency and duration.csv'))
 
 ggsave(file=file.path(img_dir, '5_ripple_peak_freq.pdf'), 
        width=9, height=5.5, unit='cm', dpi=300, device=cairo_pdf)

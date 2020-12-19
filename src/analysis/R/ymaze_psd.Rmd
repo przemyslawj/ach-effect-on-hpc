@@ -322,6 +322,12 @@ ggplotly(g, tip='text')
 ggsave(file=paste0(img_dir, '/', '3_psd_diff_stat.pdf'), 
        width=10, height=5.5, unit='cm', dpi=300, device=cairo_pdf)
 
+
+band.relative.diff %>%
+  filter(channelLocation == 'CA1') %>% 
+  dplyr::ungroup() %>%
+  dplyr::select(exp, animal, learning_day, compared.bands, relative.diff) %>%
+  write.csv(file.path(img_dir, 'Figure3 - figure supplement2 - Source Data - PSD change per freq band.csv'))
 ```
 
 ```{r}
@@ -414,6 +420,8 @@ fit.psd.ymaze.high$correct = 1
 ```{r}
 plot.laser.change(fit.psd.ymaze.high, background_auc) + ylab('Background spectrum AUC')
 ca1.bac.df = filter(fit.psd.ymaze.high, channelLocation == 'CA1') 
+dplyr::select(ca1.bac.df, exp, animal, trial_id, laserOn, background_auc) %>%
+  write.csv(file.path(img_dir, 'Figure 3H - Source Data - Aperiodic component 15-150 Hz.csv'))
 bac.auc.model = calc.laser.fixed.effects(
   ca1.bac.df, 
   background_auc)
@@ -434,6 +442,9 @@ group_by(pct.sgamma.oscillating, channelLocation, laserOn) %>% dplyr::summarise(
 
 fit.sgamma.present = filter(fit.psd.ymaze.high) %>%
   dplyr::filter(!is.na(!!var))
+
+dplyr::select(fit.sgamma.present, exp, animal, trial_id, laserOn, pow_slow_gamma) %>%
+  write.csv(file.path(img_dir, 'Figure 3G - Source Data - Slow Gamma Power.csv'))
 
 group_by(fit.sgamma.present, channelLocation, exp, laserOn) %>%
   dplyr::summarise(mean(!!var), sem(!!var), n())
@@ -507,19 +518,19 @@ plot.laser.change(fit.theta.present, !!var) + ylab('Relative Theta Power (5 - 12
 group_by(fit.theta.present, channelLocation, laserOn) %>%
   dplyr::summarise(mean(!!var), sem(!!var))
 
+dplyr::select(fit.theta.present, exp, animal, trial_id, laserOn, pow_theta) %>%
+  write.csv(file.path(img_dir, 'Figure 3E - Source Data - Theta Power.csv'))
+
 m.full = calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), pow_theta)
 g.theta.pow = plot.samples(subset(fit.theta.present, channelLocation == 'CA1'), pow_theta) +
   ylab('Relative theta power (5 - 12 Hz)')
 g.theta.pow
 ggplotly(g.theta.pow)
 ```
+
 Reduced background spectrum in low frequency bands
 ```{r}
 var = quo(background_auc)
-fit.theta.present = filter(fit.psd.ymaze.low) %>%
-  dplyr::filter(!is.na(!!var)) 
-
-plot.laser.change(fit.theta.present, !!var) + ylab('Theta Peak (Hz)')
 
 group_by(fit.theta.present, channelLocation, exp, laserOn) %>%
   dplyr::summarise(mean(!!var), sem(!!var))
@@ -542,6 +553,8 @@ plot.laser.change(fit.theta.present, !!var) + ylab('Theta Peak (Hz)')
 
 group_by(fit.theta.present, channelLocation, exp, laserOn) %>%
   dplyr::summarise(mean(!!var), sem(!!var))
+dplyr::select(fit.theta.present, exp, animal, trial_id, laserOn, peak_theta) %>%
+  write.csv(file.path(img_dir, 'Figure 3F - Source Data - Theta peak freq.csv'))
 
 m.full = calc.laser.fixed.effects(subset(fit.theta.present, channelLocation == 'CA1'), !!var)
 g.theta.peak = plot.samples(subset(fit.theta.present, channelLocation == 'CA1'), !!var) +
@@ -556,123 +569,4 @@ plot_grid(g.bac.auc.low, g.bac.auc.high, g.theta.pow, g.theta.peak, g.sgamma.pow
 ggsave(file=paste0(img_dir, '/', '5_psd_stats.pdf'), 
        width=18, height=5, unit='cm', dpi=300, device=cairo_pdf)
 ```
-
-Theta already higher during the ymaze than during stim in sleep
-```{r}
-theta.fit.df = bind_rows(
-  filter(mutate(fit.psd.df.low, sleep=TRUE), laserOn == 1), 
-  filter(mutate(fit.psd.ymaze.low, sleep=FALSE), laserOn == 0)) %>%
-  filter(!is.na(pow_theta)) %>%
-  filter(exp == 'main-effect') %>%
-  filter(channelLocation == 'CA1')
-
-ggplot(theta.fit.df) +
-  geom_jitter(aes(x=laserOn, y=pow_theta, color=animal), shape=1, height=0, width=0.3) +
-  facet_grid(. ~ exp + sleep)
-
-theta.state.model = calc.laser.fixed.effects(theta.fit.df, pow_theta,
-                         fixed.effects.str = 'sleep',
-                         random.effects.str = '(1 | animal)', 
-                         print.mean.stats=FALSE)
-
-group_by(theta.fit.df, channelLocation, exp, sleep) %>% 
-  dplyr::summarise(mean(pow_theta), sem(pow_theta), n()) 
-```
-
-Slow gamma already higher during the ymaze than during stim in sleep
-```{r}
-sgamma.fit.df = bind_rows(
-  filter(mutate(fit.psd.df.high, sleep=TRUE), laserOn == 1), 
-  filter(mutate(fit.psd.ymaze.high, sleep=FALSE), laserOn == 0)) %>%
-  filter(!is.na(pow_slow_gamma)) %>%
-  filter(exp == 'main-effect') %>%
-  filter(channelLocation == 'CA1')
-
-ggplot(sgamma.fit.df) +
-  geom_jitter(aes(x=laserOn, y=pow_slow_gamma, color=animal), shape=1, height=0, width=0.3) +
-  facet_grid(. ~ exp + sleep)
-
-sgamma.state.model = calc.laser.fixed.effects(sgamma.fit.df, pow_slow_gamma,
-                         fixed.effects.str = 'sleep',
-                         random.effects.str = '(1 | animal)',
-                         print.mean.stats=FALSE)
-
-group_by(sgamma.fit.df, channelLocation, exp, sleep) %>% 
-  dplyr::summarise(mean(pow_slow_gamma), sem(pow_slow_gamma), n()) 
-```
-# Coherence
-# ```{r}
-# wcoh.df = read_csv(paste(data_dir, 'trial_results', 'ripple_coherence_table_diode.csv', sep='/'))
-# wcoh.df$animal = as.factor(wcoh.df$animal)
-# wcoh.df$laserOn = as.factor(wcoh.df$laserOn)
-# wcoh.df = wcoh.df %>%
-#   dplyr::mutate(trial_id=paste(date, animal, trial ,sep='_'))
-# wcoh.df$trial_id = as.factor(wcoh.df$trial_id)
-# wcoh.df$channelLocation = 'CA1-CA3'
-# ```
-# 
-# ```{r}
-# wcoh.molten = melt.freq.bands(wcoh.df, extra.id.vars = c('file_name'), psd.vars.prefix='all_coh_') %>%
-#   left_join(dplyr::select(trial.info.df, -trial, -state, -laserOn), 
-#             by=c('date', 'animal', 'file_name'))
-# ```
-# 
-# ```{r}
-# animal.stage.wcoh.df = wcoh.molten %>%
-#   filter(correct==1) %>%
-#   filter(learning_day>=5) %>%
-#   dplyr::group_by(animal, band_name, band_start_freq, laserOn, stage_desc) %>%
-#   dplyr::summarise(power.mean=mean(band_power, na.rm=TRUE),
-#                    power.sem=sem(band_power))
-# 
-# animal.stage.wcoh.df %>%
-#   filter(stage_desc == 'MazeStem') %>%
-#   #filter(stage_desc == 'GoalZone20sec') %>%
-#   dplyr::mutate(animal_laser=paste(animal, laserOn, sep='_')) %>%
-#   ggplot() +
-#   geom_line(aes(x=band_start_freq, group=animal_laser, y=power.mean, color=laserOn)) + 
-#   geom_ribbon(aes(x=band_start_freq, group=animal_laser, ymin=power.mean-power.sem, ymax=power.mean+power.sem),
-#               alpha=0.1) +
-#   geom_rect(data=freq.bands.df, mapping=aes(xmin=xmin, xmax=xmax, group=band), 
-#             ymin=-1, ymax=5, alpha=0.05, fill='grey10') +
-#   scale_x_log10(limits=c(1,250), breaks=axis.breaks, labels=axis.labels) +
-#   xlab('Frequency (Hz)') +
-#   ylab('Coherence') +
-#   facet_wrap(animal ~ ., ncol = 2) +
-#   gtheme +
-#   theme(legend.position = 'top')
-# ```
-# 
-# Laser decreased coherence in the ripple band for all days, not signif
-# What about just the epochs of ripples in the CA3?
-# ```{r}
-# subset.wcoh.df = wcoh.df %>%
-#   left_join(dplyr::select(trial.info.df, -trial, -state, -laserOn), 
-#             by=c('date', 'animal', 'file_name')) %>%
-#   filter(stage_desc == 'GoalZone20sec',
-#          correct == 1,
-#          learning_day >= 5)
-# m.full = lmerTest::lmer(log(coh_ripple_band) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE)
-# m.full = lmerTest::lmer(log(coh_fast_gamma) ~ laserOn + (1 + laserOn | animal), data=subset.wcoh.df, REML = TRUE) 
-# summary(m.full)
-# plot.model.diagnostics(m.full, subset.wcoh.df$animal, subset.wcoh.df$laserOn)
-# coef(m.full)$animal
-# anova(m.full, refit=FALSE, ddf='Satterthwaite')
-# ```
-# Create ratio of coherence and plot for each animal
-# ```{r}
-# wcoh.summary = wcoh.df %>%
-#   left_join(dplyr::select(trial.info.df, -trial, -state, -laserOn), 
-#           by=c('date', 'animal', 'file_name')) %>%
-#   filter(correct==1) %>%
-#   filter(learning_day>=5) %>%
-#   group_by(animal, laserOn) %>%
-#   dplyr::summarise(value.mean=mean(coh_fast_gamma),
-#                    value.sem=sem(coh_fast_gamma)) 
-# 
-# wcoh.summary %>%
-#   ggplot() +
-#   geom_errorbar(aes(x='fgamma', ymin=value.mean-value.sem, ymax=value.mean + value.sem, color=animal, group=laserOn), 
-#                 width=0.2, position='dodge2')
-# ```
 
