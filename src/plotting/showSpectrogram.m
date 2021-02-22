@@ -1,6 +1,6 @@
-%datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
+datarootdir = '/mnt/DATA/Clara/baseline/2018-09-06';
 datarootdir = '/mnt/DATA/chat_ripples/y-maze/2019-11-13';
-%datarootdir = '/mnt/DATA/chat_ripples/sleep/2019-12-03';
+%datarootdir = '/mnt/DATA/chat_ripples/y-maze/2020-08-28';
 path = [datarootdir filesep 'signal'];
 [binName, path] = uigetfile('*.bin', 'LFP file', path);
 fprintf('Processing file: %s\n', binName);
@@ -17,12 +17,12 @@ tracking_filepath = get_trackingfilepath(datarootdir, binName);
 binNameParts = strsplit(binName, '_g0');
 expname = binNameParts{1};
 
-secondOffset = 3;
-lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 18);
+secondOffset = 2.5;
+lengthSeconds = min(str2double(meta.fileTimeSecs) - secondOffset, 50);
 
 animal_code = binName(1:2);
 channelTable = readChannelTable(...
-    '/mnt/DATA/chat_ripples/channel_desc/channels_reversed.csv',...
+    '/mnt/DATA/chat_ripples/channel_desc/channels.csv',...
     animal_code, meta, reversed_channel_map, selected_channels_only, use_diode);
 fs = 600;
 time_mouse_arrived = readTrackingCsv(tracking_filepath, secondOffset);
@@ -83,27 +83,31 @@ for chan_i = 1:size(channelTable, 1)
         'VoicePerOctave', 30, 'WaveletParameters', [3 120]);
     wt_pow = abs(wt).^2;
     low_freqs = find(wfreqs <= 15);
-    high_freqs = find(wfreqs < 200 & wfreqs > 15);
+    high_freqs = find(wfreqs < 250 & wfreqs > 15);
     
     if subplots == 0
         figure;
     end
 
+%     % Workaround to force saving as svg with all the elements
+%     set(0, 'DefaultFigureRenderer', 'painters');
+    wt_pow_scaled = matScale(wt_pow, 1000);
+    scaledTimepoints = matScale(timepoints,1000);
     hAx = [];
     hAx(1) = subplot(5,1,[3 4]);
-    A = z_score(wt_pow(high_freqs,timeIndecies));
-    draw_cwt(A, timepoints(timeIndecies), wfreqs(high_freqs));
+    A = z_score(wt_pow_scaled(high_freqs,:));
+    draw_cwt(A, scaledTimepoints, wfreqs(high_freqs));
     h = colorbar;
     zlimits = h.Limits;
     %draw_keypoints(time_mouse_arrived, [min(wfreqs(high_freqs)), max(wfreqs(high_freqs))], lengthSeconds);
     
     hAx(2) = subplot(5,1,5);
-    A = zscore(wt_pow(low_freqs,timeIndecies));
-    draw_cwt(A, timepoints(timeIndecies), wfreqs(low_freqs));
+    A = zscore(wt_pow_scaled(low_freqs,:));
+    draw_cwt(A, scaledTimepoints, wfreqs(low_freqs));
     h = colorbar;
     h.Label.String = 'z-score';
     h.Limits = zlimits;
-    draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds);
+    %draw_keypoints(time_mouse_arrived, [min(wfreqs(low_freqs)), max(wfreqs(low_freqs))], lengthSeconds);
     ax = gca;
     ax.XAxis.Visible = 'on';
     xlabel('Time (sec)');
@@ -140,4 +144,19 @@ function [] = draw_keypoints(time_mouse_arrived, ylim, lengthSeconds)
             line([x, x], ylim, 'Color', 'white');
         end
     end
+end
+
+%% Utilify functions
+function [scaledM] = matScale(M, required_width)
+    % Stretch the trial period length
+    mwidth = size(M, 2);
+    if mwidth < required_width
+        M = repelem(M, 1, ceil(required_width / mwidth));
+    end
+
+    % Compress the trial period
+    blockSize = [1, floor(mwidth / required_width)];
+    meanFilterFun = @(blockStruct) mean2(blockStruct.data(:));
+    scaledM = blockproc(M, blockSize, meanFilterFun);
+    scaledM = scaledM(:, 1:required_width);
 end

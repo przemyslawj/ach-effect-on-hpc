@@ -244,7 +244,7 @@ trial.renumber = trials.sample %>%
 ripples.sample = ripples.ymaze %>% 
   filter(stage_desc %in% selected.stages)  %>%
   filter(trial_id %in% trials.sample$trial_id) 
-write.csv(dplyr::select(ripples.sample, peak_t, trial_id, trial_rank, laserOn), 
+write.csv(dplyr::select(ripples.sample, peak_t, trial_id, laserOn), 
           file.path(img_dir, '4B-Time_of_SWRs.csv'))
 
 trials.sample = left_join(trials.sample, trial.renumber)
@@ -283,7 +283,7 @@ ca1.psddf = filter(psddf.ymaze.correct, channelLocation == 'CA1', stage_desc == 
 ca1.psddf$correct = as.factor(ca1.psddf$correct)
 m.full = calc.laser.fixed.effects(ca1.psddf, log(0.1+swr_incidence))
 
-pairwise.post.hoc(m.full) 
+pairwise.post.hoc(m.full)
 ```
 
 Difference in ripples over the duration of learning
@@ -321,6 +321,14 @@ ca1.psddf %>%
   dplyr::select(exp, animal, learning_day, trial_id, laserOn, swr_incidence) %>%
   write.csv(file.path(img_dir, 'Figure 4E - Source Data - SWRs at Goal.csv'))
 
+ca1.psddf %>%
+  group_by(exp, laserOn, animal) %>%
+  dplyr::summarise(mean(swr_incidence)) 
+
+create.animal.summary(filter(ca1.psddf, stage_desc != 'after_stim'), swr_incidence, 
+                      group_vars=vars(animal, exp, laserOn)) %>%
+  group_by(exp, laserOn) %>%
+  dplyr::summarise(mean(var.mean)) 
 plot.samples(ca1.psddf, swr_incidence) +
   #ylim(c(0, 0.35)) +
   ylab('SWR incidence (Hz)')
