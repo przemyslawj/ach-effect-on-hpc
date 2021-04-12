@@ -1,4 +1,4 @@
-Code analysing data and generating figures for publication: *Cholinergic suppression of sharp wave-ripples impairs hippocampus-dependent spatial memory*.
+Code analysing data and generating figures for publication: *Impaired spatial learning and suppression of sharp wave ripples by cholinergic activation at the goal location*, https://doi.org/10.7554/eLife.65998.
 
 The code is written in Matlab and R.
 
